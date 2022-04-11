@@ -1,0 +1,5 @@
+rootProject.name = 'JarAwareMapping'
+
+include(':JAM')
+include(':JAMMER')
+include(':JAMSPEC')
