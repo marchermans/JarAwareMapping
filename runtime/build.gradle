@@ -11,6 +11,6 @@ dependencies {
     implementation project(':jam')
 
     implementation group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '6.0-alpha-3'
-    implementation group: 'net.minecraftforge', name: 'srgutils', version: '0.4.11-sorted'
+    implementation group: 'net.minecraftforge', name: 'srgutils', version: '0.4.11'
     implementation group: 'com.google.code.gson', name:'gson', version:'2.9.0'
 }
