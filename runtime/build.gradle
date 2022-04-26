@@ -1,0 +1,16 @@
+repositories {
+    mavenLocal()
+    maven {
+        name 'Minecraft Forge'
+        url 'https://maven.minecraftforge.net'
+    }
+}
+
+dependencies {
+    implementation project(':spi')
+    implementation project(':jam')
+
+    implementation group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '6.0-alpha-3'
+    implementation group: 'net.minecraftforge', name: 'srgutils', version: '0.4.11-sorted'
+    implementation group: 'com.google.code.gson', name:'gson', version:'2.9.0'
+}

@@ -1,9 +1,9 @@
 # Project exclude paths
 /.gradle/
-/JAM/build/
-/JAM/build/classes/java/main/
-/JAM/build/classes/java/test/
-/JAMMER/build/
-/JAMMER/build/classes/java/main/
-/JAMSPEC/build/
-/JAMSPEC/build/classes/java/main/
+/jam/build/
+/jam/build/classes/java/main/
+/jam/build/classes/java/test/
+/runtime/build/
+/runtime/build/classes/java/main/
+/spi/build/
+/spi/build/classes/java/main/
