@@ -7,3 +7,5 @@
 /runtime/build/classes/java/main/
 /spi/build/
 /spi/build/classes/java/main/
+/output/
+/.idea/
