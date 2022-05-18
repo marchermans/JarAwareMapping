@@ -1,5 +1,9 @@
 rootProject.name = 'JarAwareMapping'
 
-include(':jam')
-include(':runtime')
-include(':spi')
+include(':jam-jam')
+include(':jam-runtime')
+include(':jam-spi')
+
+project(':jam-jam').projectDir = new File('jam')
+project(':jam-runtime').projectDir = new File('runtime')
+project(':jam-spi').projectDir = new File('spi')

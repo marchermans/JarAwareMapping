@@ -1,3 +1,7 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
 repositories {
     mavenLocal()
     maven {
@@ -7,8 +11,8 @@ repositories {
 }
 
 dependencies {
-    implementation project(':spi')
-    implementation project(':jam')
+    implementation project(':jam-spi')
+    implementation project(':jam-jam')
 
     implementation group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '6.0-alpha-3'
     implementation group: 'net.minecraftforge', name: 'srgutils', version: '0.4.11'

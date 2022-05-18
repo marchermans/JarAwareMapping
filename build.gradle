@@ -1,8 +1,9 @@
-subprojects {
+subprojects { subproject ->
     apply plugin: 'java'
+    apply plugin: 'maven-publish'
 
-    group 'com.ldtteam'
-    version '1.0-SNAPSHOT'
+    group 'com.ldtteam.jam'
+    version subproject.buildVersion
 
     repositories {
         mavenCentral()
@@ -29,5 +30,55 @@ subprojects {
 
     test {
         useJUnitPlatform()
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {pub ->
+                from components.java
+
+                pom {
+                    url = 'https://github.com/OrionDevelopment/JarAwareMapping'
+                    licenses {
+                        license {
+                            name = 'GNU GENERAL PUBLIC LICENSE Version 3'
+                            url = 'https://www.gnu.org/licenses/gpl-3.0.en.html'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = 'OrionDevelopment'
+                            name = 'Marc Hermans'
+                            email = 'marc.hermans@ldtteam.com'
+                        }
+                    }
+                    scm {
+                        connection = 'https://github.com/OrionDevelopment/JarAwareMapping.git'
+                        developerConnection = 'https://github.com/OrionDevelopment/JarAwareMapping.git'
+                        url = 'https://github.com/OrionDevelopment/JarAwareMapping'
+                    }
+                }
+            }
+        }
+
+        if (System.getenv().containsKey("LDTTeamJfrogUsername") && System.getenv().containsKey("LDTTeamJfrogPassword")) {
+            repositories {
+                maven {
+                    name 'LDTTeamJfrog'
+                    credentials {
+                        username System.getenv().get("LDTTeamJfrogUsername")
+                        password System.getenv().get("LDTTeamJfrogPassword")
+                    }
+                    url 'https://ldtteam.jfrog.io/ldtteam/mods-maven'
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                name 'RepoDirectory'
+                url 'file://' + rootProject.file('repo').getAbsolutePath()
+            }
+        }
     }
 }

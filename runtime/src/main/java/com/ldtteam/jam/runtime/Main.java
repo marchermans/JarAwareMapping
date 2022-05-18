@@ -28,7 +28,7 @@ public class Main
 
     public static void main(String[] args)
     {
-        final OptionParser parser = new OptionParser("n:j:m:o:");
+        final OptionParser parser = new OptionParser();
         final AbstractOptionSpec<String> existingNamesOption = parser.acceptsAll(
             Lists.newArrayList("existingNames", "en"),
             "The name of the input version.")
