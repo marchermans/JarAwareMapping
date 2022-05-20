@@ -3,7 +3,7 @@ subprojects { subproject ->
     apply plugin: 'maven-publish'
 
     group 'com.ldtteam.jam'
-    version subproject.buildVersion
+    version System.getenv().containsKey("Version") ? System.getenv("Version") : project.buildVersion
 
     repositories {
         mavenCentral()
@@ -70,6 +70,19 @@ subprojects { subproject ->
                         password System.getenv().get("LDTTeamJfrogPassword")
                     }
                     url 'https://ldtteam.jfrog.io/ldtteam/mods-maven'
+                }
+            }
+        }
+
+        if (System.getenv().containsKey("ForgeMavenUsername") && System.getenv().containsKey("ForgeMavenPassword")) {
+            repositories {
+                maven {
+                    name 'LDTTeamJfrog'
+                    credentials {
+                        username System.getenv().get("ForgeMavenUsername")
+                        password System.getenv().get("ForgeMavenPassword")
+                    }
+                    url 'https://maven.minecraftforge.net/'
                 }
             }
         }

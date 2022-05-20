@@ -234,7 +234,9 @@ public class TSRGWriter implements IOutputWriter
                 {
                     for (final MappingToyMetadata.ClassInfo.RecordInfo recordInfo : classMetadata.getRecords())
                     {
-                        if (methodNode.desc.endsWith(recordInfo.getDesc()) && recordInfo.getMethods().contains(obfuscatedMethodName))
+                        final String officialRecordDescriptor = obfuscatedToOfficialMapping.remapDescriptor(recordInfo.getDesc());
+
+                        if (methodNode.desc.endsWith(officialRecordDescriptor) && recordInfo.getMethods().contains(obfuscatedMethodName))
                         {
                             final IMappingFile.IClass obfuscatedClass = obfuscatedToOfficialMapping.getClass(officialToObfuscatedMapping.remapClass(classNode.name));
                             final IMappingFile.IField obfuscatedField = obfuscatedClass.getField(recordInfo.getField());
