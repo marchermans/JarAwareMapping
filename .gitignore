@@ -1,12 +1,8 @@
 # Project exclude paths
 /.gradle/
-/jam/build/
-/jam/build/classes/java/main/
-/jam/build/classes/java/test/
-/runtime/build/
-/runtime/build/classes/java/main/
-/spi/build/
-/spi/build/classes/java/main/
+**/build/
 /output/
 /.idea/
 /repo/
+/input/
+/output/

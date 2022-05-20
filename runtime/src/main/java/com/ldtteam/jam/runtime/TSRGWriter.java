@@ -16,6 +16,8 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ParameterNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -30,6 +32,7 @@ import static org.objectweb.asm.Opcodes.ACC_STATIC;
 public class TSRGWriter implements IOutputWriter
 {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(TSRGWriter.class);
     private static final Gson GSON                      = new GsonBuilder().create();
     private static final Type TYPE_MAP_STRING_CLASSINFO = new TypeToken<Map<String, MappingToyMetadata.ClassInfo>>() {}.getType();
     private final IMappingFile                              officialToObfuscatedMapping;
@@ -345,6 +348,21 @@ public class TSRGWriter implements IOutputWriter
       final BiMap<MethodNode, Integer> methodIds,
       final Map<String, MappingToyMetadata.ClassInfo> classInfoMap)
     {
+        record MethodReference(String owner, String name, String descriptor) {}
+        final Map<MethodReference, MethodNode> methodsByReference = new HashMap<>();
+        methods.forEach(methodNode -> {
+            if (methodNode.name.startsWith("<"))
+            {
+                return;
+            }
+
+            final ClassNode classNode = classNodesByMethodNode.get(methodNode);
+            methodsByReference.put(
+                    new MethodReference(classNode.name, methodNode.name, methodNode.desc),
+                    methodNode
+            );
+        });
+
         final Multimap<MethodNode, MethodNode> overrides = HashMultimap.create();
         methods.forEach(
           methodNode -> {
@@ -355,18 +373,77 @@ public class TSRGWriter implements IOutputWriter
 
               final ClassNode classNode = classNodesByMethodNode.get(methodNode);
               final LinkedList<ClassNode> superTypes = classInheritanceData.getOrDefault(classNode, new LinkedList<>());
-              if (superTypes.isEmpty())
+              if (!superTypes.isEmpty())
               {
+                  superTypes.forEach(superType -> {
+                      superType.methods.stream()
+                              .filter(superMethodNode -> !superMethodNode.name.equals("<"))
+                              .filter(superMethodNode -> superMethodNode.name.equals(methodNode.name) && superMethodNode.desc.equals(methodNode.desc))
+                              .forEach(superMethodNode -> overrides.put(methodNode, superMethodNode));
+                  });
+              }
+
+              final String obfuscatedOwnerClassName = officialToObfuscatedMapping.remapClass(classNode.name);
+              if (Objects.equals(obfuscatedOwnerClassName, classNode.name)) {
+                  //Not an obfuscated class. Ignore
+                  return;
+              }
+              if (!classInfoMap.containsKey(obfuscatedOwnerClassName)) {
+                  //Not a class we have metadata for, would be weird, so log and ignore.
+                  LOGGER.warn("Could not find metadata for class: " + classNode.name + " its obfuscated class name: " + obfuscatedOwnerClassName + " does not seems to be found in the json metadata.");
+                  return;
+              }
+              final MappingToyMetadata.ClassInfo classInfo = classInfoMap.get(obfuscatedOwnerClassName);
+              if (classInfo == null) {
+                  //Not a class we have metadata for, would be weird, so log and ignore.
+                  LOGGER.warn("Could not find metadata for class: " + classNode.name + " its obfuscated class name: " + obfuscatedOwnerClassName + " does not seems to be found in the json metadata.");
                   return;
               }
 
-              superTypes.forEach(superType -> {
-                  superType.methods.stream()
-                    .filter(superMethodNode -> !superMethodNode.name.equals("<"))
-                    .filter(superMethodNode -> superMethodNode.name.equals(methodNode.name) && superMethodNode.desc.equals(methodNode.desc))
-                    .findFirst()
-                    .ifPresent(superMethodNode -> overrides.put(methodNode, superMethodNode));
-              });
+              final String obfuscatedMethodName = officialToObfuscatedMapping.getClass(classNode.name)
+                      .remapMethod(methodNode.name, methodNode.desc);
+              if (Objects.equals(obfuscatedMethodName, methodNode.name)) {
+                  //Not obfuscated method without metadata. Ignore
+                  return;
+              }
+              final String obfuscatedDescriptor = officialToObfuscatedMapping.remapDescriptor(methodNode.desc);
+              final MappingToyMetadata.ClassInfo.MethodInfo methodInfo = classInfo.getMethods().get(obfuscatedMethodName + obfuscatedDescriptor);
+              if (methodInfo == null) {
+                  //Not a class we have metadata for, would be weird, so log and ignore.
+                  LOGGER.warn("Could not find metadata for method: " + methodNode.name + "(" + methodNode.desc + ")" + " in class: " + classNode.name + " does not seems to be found in the json metadata.");
+                  return;
+              }
+
+              if (methodInfo.getOverrides() == null)
+              {
+                  //No overrides available.
+                  return;
+              }
+
+              methodInfo.getOverrides().stream()
+                      .map(method -> {
+                          final String officialClassName = obfuscatedToOfficialMapping.remapClass(method.getOwner());
+                          final String officialDescriptor = obfuscatedToOfficialMapping.remapDescriptor(method.getDesc());
+                          final IMappingFile.IClass ownerClass = obfuscatedToOfficialMapping.getClass(method.getOwner());
+                          if (officialClassName == null || officialDescriptor == null || ownerClass == null
+                                  || officialClassName.equals(method.getOwner()) || officialDescriptor.equals(method.getDesc()))
+                          {
+                              //Not remappable or not obfuscated. Ignore.
+                              return null;
+                          }
+
+                          final String officialMethodName = ownerClass.remapMethod(method.getName(), method.getDesc());
+                          final MethodReference reference = new MethodReference(officialClassName, officialMethodName, officialDescriptor);
+                          if (!methodsByReference.containsKey(reference)) {
+                              //Not a class we have metadata for, would be weird, so log and ignore.
+                              LOGGER.warn("Could not find method node for method: " + officialMethodName + "(" + officialDescriptor + ")" + " in class: " + officialDescriptor);
+                              return null;
+                          }
+
+                          return methodsByReference.get(reference);
+                      })
+                      .filter(Objects::nonNull)
+                      .forEach(superMethodNode -> overrides.put(methodNode, superMethodNode));
           }
         );
 
