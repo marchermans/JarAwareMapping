@@ -1,5 +1,7 @@
-package com.ldtteam.jam.runtime;
+package com.ldtteam.jam.mcpconfig;
 
+import com.ldtteam.jam.spi.ast.metadata.*;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.objectweb.asm.Opcodes;
 
 import java.util.ArrayList;
@@ -7,58 +9,80 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class MappingToyMetadata
+public class MappingToyMetadata implements IMetadataAST
 {
-    private interface IAccessible {
-        int getAccess();
 
+    private final Map<String, ClassInfo> classInfoMap;
+
+    public MappingToyMetadata(Map<String, ClassInfo> classInfoMap) {
+        this.classInfoMap = classInfoMap;
+    }
+
+    @Override
+    public Map<String, ? extends IMetadataClass> getClassesByName() {
+        return classInfoMap;
+    }
+
+    private interface IAccessible extends IMetadataWithAccessInformation {
+        int getAccess();
+        @Override
         default boolean isInterface() {
             return ((getAccess() & Opcodes.ACC_INTERFACE) != 0);
         }
 
+        @Override
         default boolean isAbstract() {
             return ((getAccess() & Opcodes.ACC_ABSTRACT) != 0);
         }
 
+        @Override
         default boolean isSynthetic() {
             return ((getAccess() & Opcodes.ACC_SYNTHETIC) != 0);
         }
 
+        @Override
         default boolean isAnnotation() {
             return ((getAccess() & Opcodes.ACC_ANNOTATION) != 0);
         }
 
+        @Override
         default boolean isEnum() {
             return ((getAccess() & Opcodes.ACC_ENUM) != 0);
         }
 
+        @Override
         default boolean isPackagePrivate() {
             return (getAccess() & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) == 0;
         }
 
+        @Override
         default boolean isPublic() {
             return (getAccess() & Opcodes.ACC_PUBLIC) != 0;
         }
 
+        @Override
         default boolean isPrivate() {
             return (getAccess() & Opcodes.ACC_PRIVATE) != 0;
         }
 
+        @Override
         default boolean isProtected() {
             return (getAccess() & Opcodes.ACC_PROTECTED) != 0;
         }
 
+        @Override
         default boolean isStatic() {
             return (getAccess() & Opcodes.ACC_STATIC) != 0;
         }
 
+        @Override
         default boolean isFinal() {
             return (getAccess() & Opcodes.ACC_FINAL) != 0;
         }
     }
 
     @SuppressWarnings("unused")
-    public static class ClassInfo implements IAccessible {
+    public static class ClassInfo implements IAccessible, IMetadataClass {
         private String       superName;
         private List<String> interfaces;
         private Integer      access;
@@ -67,6 +91,7 @@ public class MappingToyMetadata
         private Map<String, MethodInfo> methods;
         private List<RecordInfo> records;
 
+        @Override
         public String getSuperName()
         {
             return superName;
@@ -77,6 +102,7 @@ public class MappingToyMetadata
             this.superName = superName;
         }
 
+        @Override
         public List<String> getInterfaces()
         {
             return interfaces;
@@ -98,6 +124,7 @@ public class MappingToyMetadata
             this.access = access;
         }
 
+        @Override
         public String getSignature()
         {
             return signature;
@@ -106,6 +133,23 @@ public class MappingToyMetadata
         public void setSignature(final String signature)
         {
             this.signature = signature;
+        }
+
+        @Override
+        public Map<String, MethodInfo> getMethodsByName()
+        {
+            return methods;
+        }
+
+        public Map<String, MethodInfo> getMethods()
+        {
+            return methods;
+        }
+
+        @Override
+        public Map<String, FieldInfo> getFieldsByName()
+        {
+            return fields;
         }
 
         public Map<String, FieldInfo> getFields()
@@ -118,16 +162,12 @@ public class MappingToyMetadata
             this.fields = fields;
         }
 
-        public Map<String, MethodInfo> getMethods()
-        {
-            return methods;
-        }
-
         public void setMethods(final Map<String, MethodInfo> methods)
         {
             this.methods = methods;
         }
 
+        @Override
         public List<RecordInfo> getRecords()
         {
             return records;
@@ -138,12 +178,13 @@ public class MappingToyMetadata
             this.records = records;
         }
 
-        public static class FieldInfo implements IAccessible {
+        public static class FieldInfo implements IAccessible, IMetadataField {
             private String desc;
             private Integer access;
             private String signature;
             private String force;
 
+            @Override
             public String getDesc()
             {
                 return desc;
@@ -165,6 +206,7 @@ public class MappingToyMetadata
                 this.access = access;
             }
 
+            @Override
             public String getSignature()
             {
                 return signature;
@@ -175,6 +217,7 @@ public class MappingToyMetadata
                 this.signature = signature;
             }
 
+            @Override
             public String getForce()
             {
                 return force;
@@ -186,7 +229,7 @@ public class MappingToyMetadata
             }
         }
 
-        public static class MethodInfo implements IAccessible {
+        public static class MethodInfo implements IAccessible, IMetadataMethod {
             private Integer access;
             private String signature;
             private Bounce bouncer;
@@ -197,7 +240,7 @@ public class MappingToyMetadata
             @Override
             public int getAccess()
             {
-                return access;
+                return access == null ? 0 : access;
             }
 
             public void setAccess(final Integer access)
@@ -205,6 +248,7 @@ public class MappingToyMetadata
                 this.access = access;
             }
 
+            @Override
             public String getSignature()
             {
                 return signature;
@@ -215,6 +259,7 @@ public class MappingToyMetadata
                 this.signature = signature;
             }
 
+            @Override
             public Bounce getBouncer()
             {
                 return bouncer;
@@ -225,6 +270,7 @@ public class MappingToyMetadata
                 this.bouncer = bouncer;
             }
 
+            @Override
             public String getForce()
             {
                 return force;
@@ -235,6 +281,7 @@ public class MappingToyMetadata
                 this.force = force;
             }
 
+            @Override
             public Set<Method> getOverrides()
             {
                 return overrides;
@@ -245,6 +292,7 @@ public class MappingToyMetadata
                 this.overrides = overrides;
             }
 
+            @Override
             public Method getParent()
             {
                 return parent;
@@ -256,11 +304,13 @@ public class MappingToyMetadata
             }
         }
 
-        public static class RecordInfo {
+        public static class RecordInfo implements IMetadataRecordComponent {
             private String field;
             private String desc;
             private List<String> methods = new ArrayList<>();
 
+            @Override
+            @NonNull
             public String getField()
             {
                 return field;
@@ -271,6 +321,8 @@ public class MappingToyMetadata
                 this.field = field;
             }
 
+            @Override
+            @NonNull
             public String getDesc()
             {
                 return desc;
@@ -281,6 +333,7 @@ public class MappingToyMetadata
                 this.desc = desc;
             }
 
+            @Override
             public List<String> getMethods()
             {
                 return methods;
@@ -293,11 +346,14 @@ public class MappingToyMetadata
         }
     }
 
-    public static class Method {
+    @SuppressWarnings("unused")
+    public static class Method implements IMetadataMethodReference {
         private String owner;
         private String name;
         private String desc;
 
+        @Override
+        @NonNull
         public String getOwner()
         {
             return owner;
@@ -308,6 +364,8 @@ public class MappingToyMetadata
             this.owner = owner;
         }
 
+        @Override
+        @NonNull
         public String getName()
         {
             return name;
@@ -318,6 +376,8 @@ public class MappingToyMetadata
             this.name = name;
         }
 
+        @Override
+        @NonNull
         public String getDesc()
         {
             return desc;
@@ -329,10 +389,12 @@ public class MappingToyMetadata
         }
     }
 
-    private static class Bounce {
+    @SuppressWarnings("unused")
+    private static class Bounce implements IMetadataBounce {
         private Method target;
         private Method owner;
 
+        @Override
         public Method getTarget()
         {
             return target;
@@ -343,6 +405,7 @@ public class MappingToyMetadata
             this.target = target;
         }
 
+        @Override
         public Method getOwner()
         {
             return owner;

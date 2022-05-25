@@ -1,4 +1,4 @@
-package com.ldtteam.jam.runtime;
+package com.ldtteam.jam.mcpconfig;
 
 import com.google.common.collect.Lists;
 import com.ldtteam.jam.spi.IJammer;
@@ -108,7 +108,7 @@ public class Main
         {
             final String name = existingNames.get(i);
             final Path jar = existingJars.get(i).toPath();
-            final Optional<IRemapper> remapped = Optional.of(TSRGMapper.create(existingMappings.get(i).toPath()));
+            final Optional<IRemapper> remapped = Optional.of(TSRGRemapper.createObfuscatedToOfficial(existingMappings.get(i).toPath()));
             final Optional<IExistingIdentitySupplier> identifier = Optional.of(TSRGIdentitySupplier.create(
               existingIdentifiers.get(i).toPath(),
               existingMappings.get(i).toPath()
@@ -118,13 +118,15 @@ public class Main
         }
 
         inputConfigurations.add(
-          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(TSRGMapper.create(inputMapping.toPath())), Optional.empty())
+          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(TSRGRemapper.createObfuscatedToOfficial(inputMapping.toPath())), Optional.empty())
         );
 
         final OutputConfiguration outputConfiguration = new OutputConfiguration(
           outputPath.toPath(),
           TSRGNewIdentitySupplier.create(existingIdentifiers.get(existingIdentifiers.size() - 1).toPath()),
-          TSRGWriter.create(inputMapping.toPath(), inputMetadata.toPath())
+          TSRGNamedASTBuilder.AST(inputMapping.toPath()),
+          TSRGMetadataProvider.create(inputMetadata.toPath()),
+          TSRGNamedASTWriter.create()
         );
 
         final MappingRuntimeConfiguration runtimeConfiguration = new MappingRuntimeConfiguration(

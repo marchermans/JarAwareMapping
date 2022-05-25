@@ -1,6 +1,6 @@
 package com.ldtteam.jam.loader;
 
-import com.ldtteam.jam.spi.meta.IASMData;
+import com.ldtteam.jam.spi.asm.IASMData;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;

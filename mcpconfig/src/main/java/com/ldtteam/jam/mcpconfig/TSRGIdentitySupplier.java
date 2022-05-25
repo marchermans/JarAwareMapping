@@ -1,4 +1,4 @@
-package com.ldtteam.jam.runtime;
+package com.ldtteam.jam.mcpconfig;
 
 import com.ldtteam.jam.spi.identification.IExistingIdentitySupplier;
 import com.machinezoo.noexception.Exceptions;

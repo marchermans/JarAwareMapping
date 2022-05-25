@@ -2,6 +2,7 @@ package com.ldtteam.jam;
 
 import com.google.common.collect.*;
 import com.ldtteam.jam.spi.IJammer;
+import com.ldtteam.jam.spi.ast.named.INamedAST;
 import com.ldtteam.jam.spi.configuration.Configuration;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;
 import com.ldtteam.jam.spi.configuration.MappingRuntimeConfiguration;
@@ -591,13 +592,21 @@ public class Jammer implements IJammer
       final OutputConfiguration outputConfiguration,
       final LoadedASMData asmData)
     {
+        LOGGER.info("Creating named AST");
+
+        final INamedAST ast = outputConfiguration.astBuilder().build(
+                classIds,
+                methodIds,
+                fieldIds,
+                parameterIds,
+                asmData,
+                outputConfiguration.metadataProvider().getAST()
+        );
+
+        LOGGER.info("Writing named AST");
         outputConfiguration.writer().write(
           outputConfiguration.outputDirectory(),
-          classIds,
-          methodIds,
-          fieldIds,
-          parameterIds,
-          asmData
+          ast
         );
     }
     
