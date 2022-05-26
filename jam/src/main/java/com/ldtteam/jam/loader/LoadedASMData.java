@@ -8,6 +8,6 @@ import org.objectweb.asm.tree.ParameterNode;
 
 import java.util.Set;
 
-public record LoadedASMData(String name, Set<ClassNode> classes, Set<MethodNode> methods, Set<FieldNode> fields, Set<ParameterNode> parameters) implements IASMData
+public record LoadedASMData(String name, Set<ClassNode> classes, Set<MethodNode> methods, Set<FieldNode> fields) implements IASMData
 {
 }

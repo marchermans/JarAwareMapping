@@ -1,6 +1,7 @@
 package com.ldtteam.jam.mcpconfig;
 
 import com.ldtteam.jam.spi.ast.named.INamedAST;
+import com.ldtteam.jam.spi.configuration.MetadataWritingConfiguration;
 import com.ldtteam.jam.spi.writer.INamedASTOutputWriter;
 import com.machinezoo.noexception.Exceptions;
 import net.minecraftforge.srgutils.IMappingBuilder;
@@ -21,6 +22,7 @@ public class TSRGNamedASTWriter implements INamedASTOutputWriter {
     @Override
     public void write(
             final Path outputDirectory,
+            final MetadataWritingConfiguration metadataWritingConfiguration,
             final INamedAST ast) {
         IMappingBuilder builder = IMappingBuilder.create("obf", "srg", "id");
 
@@ -49,8 +51,10 @@ public class TSRGNamedASTWriter implements INamedASTOutputWriter {
                     methodMapping.meta("is_static", "true");
                 }
 
-                if (namedMethod.isLambda()) {
-                    methodMapping.meta("is_lambda", "true");
+                if (metadataWritingConfiguration.writeLambdaMetaInformationValue()) {
+                    if (namedMethod.isLambda()) {
+                        methodMapping.meta("is_lambda", "true");
+                    }
                 }
 
                 namedMethod.parameters().forEach(namedParameter -> methodMapping.parameter(

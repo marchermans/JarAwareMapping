@@ -1,6 +1,7 @@
 package com.ldtteam.jam.spi.writer;
 
 import com.ldtteam.jam.spi.ast.named.INamedAST;
+import com.ldtteam.jam.spi.configuration.MetadataWritingConfiguration;
 
 import java.nio.file.Path;
 
@@ -18,5 +19,6 @@ public interface INamedASTOutputWriter {
      */
     void write(
             Path outputDirectory,
+            MetadataWritingConfiguration metadataWritingConfiguration,
             INamedAST ast);
 }

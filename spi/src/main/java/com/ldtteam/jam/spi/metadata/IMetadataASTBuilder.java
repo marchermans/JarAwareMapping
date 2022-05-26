@@ -6,7 +6,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * Provides jar metadata which the system can use to process the mappings.
  */
-public interface IMetadataProvider {
+public interface IMetadataASTBuilder
+{
 
     /**
      * Gives access to the syntax tree built from metadata that this provider can provide.
@@ -14,5 +15,5 @@ public interface IMetadataProvider {
      * @return The metadata AST.
      */
     @NonNull
-    IMetadataAST getAST();
+    IMetadataAST ast();
 }

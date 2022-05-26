@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
-import com.ldtteam.jam.spi.metadata.IMetadataProvider;
+import com.ldtteam.jam.spi.metadata.IMetadataASTBuilder;
 import com.machinezoo.noexception.Exceptions;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.slf4j.Logger;
@@ -17,12 +17,13 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.function.Supplier;
 
-public class TSRGMetadataProvider implements IMetadataProvider {
+public class TSRGMetadataASTBuilder implements IMetadataASTBuilder
+{
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TSRGMetadataProvider.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TSRGMetadataASTBuilder.class);
 
-    public static IMetadataProvider create(final Path metadataFile) {
-        return new TSRGMetadataProvider(metadataFile);
+    public static IMetadataASTBuilder create(final Path metadataFile) {
+        return new TSRGMetadataASTBuilder(metadataFile);
     }
 
     private static final Gson GSON                      = new GsonBuilder().create();
@@ -31,13 +32,13 @@ public class TSRGMetadataProvider implements IMetadataProvider {
     private final Path metadataFile;
     private final Supplier<IMetadataAST> metadataASTSupplier;
 
-    private TSRGMetadataProvider(final Path metadataFile) {
+    private TSRGMetadataASTBuilder(final Path metadataFile) {
         this.metadataFile = metadataFile;
         metadataASTSupplier = Suppliers.memoize(this::loadAST);
     }
 
     @Override
-    public @NonNull IMetadataAST getAST() {
+    public @NonNull IMetadataAST ast() {
         return metadataASTSupplier.get();
     }
 

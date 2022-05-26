@@ -111,7 +111,7 @@ public class Jammer implements IJammer
 
         LOGGER.info("Reconstructing transitively lost method mappings...");
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
-            //We are talking about the A_A case here, so no methods inside of this will be mapped.
+            //We are talking about the A_A case here, so no methods inside this will be mapped.
             final Set<MethodNode> unmappedNextGenMethods = Sets.newHashSet(nextGenClass.methods);
             final Set<MethodNode> unmappedCurrentGenMethods = Sets.newHashSet(transitiveCurrentGenClass.methods);
 
@@ -123,7 +123,7 @@ public class Jammer implements IJammer
 
         LOGGER.info("Reconstructing transitively lost field mappings...");
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
-            //We are talking about the A_A case here, so no fields inside of this will be mapped.
+            //We are talking about the A_A case here, so no fields inside this will be mapped.
             final Set<FieldNode> unmappedNextGenFields = Sets.newHashSet(nextGenClass.fields);
             final Set<FieldNode> unmappedCurrentGenFields = Sets.newHashSet(transitiveCurrentGenClass.fields);
 
@@ -151,7 +151,7 @@ public class Jammer implements IJammer
         final BiMap<FieldNode, Integer> fieldIds = determineFieldIds(mappedFields, unmappedFields, classNodesByFieldNodes, configurationNameByFieldNodes, configurationsByName, configuration.outputConfiguration());
 
         LOGGER.info("Determining method and parameter ids...");
-        final MethodIdMappingResult methodIdMappingResult = determineMethodIds(mappedMethods, unmappedMethods, classNodesByMethodNodes, configurationNameByMethodNodes, configurationsByName, configuration.outputConfiguration());
+        final MethodIdMappingResult methodIdMappingResult = determineMethodIds(mappedMethods, unmappedMethods, classNodesByMethodNodes, configurationNameByMethodNodes, configurationsByName, configuration.outputConfiguration(), data);
 
         LOGGER.info("Writing mappings...");
         final LoadedASMData targetASMData = dataByInputName.get(Objects.requireNonNull(configuration.inputs().get(configuration.inputs().size() - 1)).name());
@@ -505,7 +505,8 @@ public class Jammer implements IJammer
       final Map<MethodNode, ClassNode> classNodesByMethodNodes,
       final Map<MethodNode, String> configurationNameByMethodNodes,
       final Map<String, InputConfiguration> configurationsByName,
-      final OutputConfiguration outputConfiguration
+      final OutputConfiguration outputConfiguration,
+      final Set<LoadedASMData> data
     ) {
         final BiMap<MethodNode, Integer> methodIds = HashBiMap.create();
         final BiMap<ParameterNode, Integer> parameterIds = HashBiMap.create();
@@ -600,12 +601,13 @@ public class Jammer implements IJammer
                 fieldIds,
                 parameterIds,
                 asmData,
-                outputConfiguration.metadataProvider().getAST()
+                outputConfiguration.metadataProvider().ast()
         );
 
         LOGGER.info("Writing named AST");
         outputConfiguration.writer().write(
           outputConfiguration.outputDirectory(),
+          outputConfiguration.metadataWritingConfiguration(),
           ast
         );
     }

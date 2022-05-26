@@ -9,7 +9,7 @@ import java.nio.file.Path;
 
 public class TSRGNamedASTBuilder {
 
-    public static INamedASTBuilder AST(final Path inputMappingPath) {
+    public static INamedASTBuilder ast(final Path inputMappingPath) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath);
         final IRemapper obfuscatedToOfficialRemapper = TSRGRemapper.createObfuscatedToOfficial(inputMappingPath);
         final INamedClassBuilder classBuilder = classes(inputMappingPath);

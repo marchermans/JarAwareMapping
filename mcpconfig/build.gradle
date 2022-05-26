@@ -14,12 +14,28 @@ repositories {
 dependencies {
     implementation project(':jam-spi')
     implementation project(':jam-jam')
+    implementation project(':jam-runtime')
 
-    implementation group: 'net.sf.jopt-simple', name: 'jopt-simple', version: '6.0-alpha-3'
     implementation group: 'net.minecraftforge', name: 'srgutils', version: '0.4.11'
     implementation group: 'com.google.code.gson', name:'gson', version:'2.9.0'
 }
 
 application {
-    mainClass = 'com.ldtteam.jam.runtime.Main'
+    mainClass = 'com.ldtteam.jam.mcpconfig.Main'
+}
+
+jar {
+    manifest {
+        attributes(
+                'Implementation-Title':   'Jammer - MCPConfig',
+                'Implementation-Version': project.version)
+    }
+}
+
+shadowJar {
+    manifest {
+        attributes(
+                'Implementation-Title':   'Jammer - MCPConfig',
+                'Implementation-Version': project.version)
+    }
 }

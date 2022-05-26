@@ -35,11 +35,4 @@ public interface IASMData
      * @return The fields in the jar.
      */
     Set<FieldNode> fields();
-
-    /**
-     * Gives access to the parameter information in the jar.
-     *
-     * @return The parameter information in the jar.
-     */
-    Set<ParameterNode> parameters();
 }

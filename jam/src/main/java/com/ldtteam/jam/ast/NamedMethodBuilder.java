@@ -165,7 +165,7 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
         return new NamedMethod(
                 obfuscatedMethodName,
                 identifiedName,
-                methodIds.get(rootNode),
+                methodIds.get(methodNode),
                 obfuscatedDescriptor,
                 methodMetadata.isStatic() || obfuscatedMethodName.equals("<clinit>"),
                 methodNode.name.contains("lambda$"),
