@@ -47,11 +47,13 @@ public class TSRGNamedASTBuilder {
 
     public static INamedMethodBuilder methods(final Path inputMappingPath) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath);
+        final IRemapper metadataToOfficialRemapper = TSRGRemapper.createObfuscatedToOfficial(inputMappingPath);
         final INameProvider<Integer> methodNameProvider = TSRGIdentityNameProvider.methods();
         final INamedParameterBuilder parameterBuilder = parameters(inputMappingPath);
 
         return NamedMethodBuilder.create(
                 officialToObfuscatedRemapper,
+                metadataToOfficialRemapper,
                 methodNameProvider,
                 parameterBuilder
         );

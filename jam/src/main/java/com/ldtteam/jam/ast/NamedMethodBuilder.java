@@ -25,17 +25,19 @@ import static org.objectweb.asm.Opcodes.ACC_STATIC;
 public class NamedMethodBuilder implements INamedMethodBuilder {
 
     public static INamedMethodBuilder create(
-            IRemapper runtimeToASTRemapper, INameProvider<Integer> methodNameProvider, INamedParameterBuilder parameterBuilder
+            IRemapper runtimeToASTRemapper, IRemapper metadataToRuntimeRemapper, INameProvider<Integer> methodNameProvider, INamedParameterBuilder parameterBuilder
     ) {
-        return new NamedMethodBuilder(runtimeToASTRemapper, methodNameProvider, parameterBuilder);
+        return new NamedMethodBuilder(runtimeToASTRemapper, metadataToRuntimeRemapper, methodNameProvider, parameterBuilder);
     }
 
     private final IRemapper runtimeToASTRemapper;
+    private final IRemapper metadataToRuntimeRemapper;
     private final INameProvider<Integer> methodNameProvider;
     private final INamedParameterBuilder parameterBuilder;
 
-    private NamedMethodBuilder(IRemapper runtimeToASTRemapper, INameProvider<Integer> methodNameProvider, INamedParameterBuilder parameterBuilder) {
+    private NamedMethodBuilder(IRemapper runtimeToASTRemapper, IRemapper metadataToRuntimeRemapper, INameProvider<Integer> methodNameProvider, INamedParameterBuilder parameterBuilder) {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
+        this.metadataToRuntimeRemapper = metadataToRuntimeRemapper;
         this.methodNameProvider = methodNameProvider;
         this.parameterBuilder = parameterBuilder;
     }
@@ -124,7 +126,7 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
         {
             for (final IMetadataRecordComponent recordInfo : classMetadata.getRecords())
             {
-                final Optional<String> officialRecordDescriptor = runtimeToASTRemapper.remapDescriptor(recordInfo.getDesc());
+                final Optional<String> officialRecordDescriptor = metadataToRuntimeRemapper.remapDescriptor(recordInfo.getDesc());
                 if (isRecordComponentForMethod(methodNode, obfuscatedMethodName, recordInfo, officialRecordDescriptor))
                 {
                     if (identifiedFieldNamesByOriginalName.containsKey(recordInfo.getField()))
