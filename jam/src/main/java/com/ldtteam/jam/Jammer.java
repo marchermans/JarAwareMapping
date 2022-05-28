@@ -10,6 +10,7 @@ import com.ldtteam.jam.spi.configuration.OutputConfiguration;
 import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.loader.ASMDataLoader;
 import com.ldtteam.jam.loader.LoadedASMData;
+import com.ldtteam.jam.util.SetsUtil;
 import com.machinezoo.noexception.Exceptions;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -112,8 +113,8 @@ public class Jammer implements IJammer
         LOGGER.info("Reconstructing transitively lost method mappings...");
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no methods inside this will be mapped.
-            final Set<MethodNode> unmappedNextGenMethods = Sets.newHashSet(nextGenClass.methods);
-            final Set<MethodNode> unmappedCurrentGenMethods = Sets.newHashSet(transitiveCurrentGenClass.methods);
+            final Set<MethodNode> unmappedNextGenMethods = nextGenClass.methods.stream().collect(SetsUtil.methods((node) -> nextGenClass));
+            final Set<MethodNode> unmappedCurrentGenMethods = transitiveCurrentGenClass.methods.stream().collect(SetsUtil.methods((node) -> transitiveCurrentGenClass));
 
             final MappingResult<MethodNode> transitiveMethodMapping = configuration.runtimeConfiguration().methodMapper().map(unmappedNextGenMethods, unmappedCurrentGenMethods);
 
@@ -124,8 +125,8 @@ public class Jammer implements IJammer
         LOGGER.info("Reconstructing transitively lost field mappings...");
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no fields inside this will be mapped.
-            final Set<FieldNode> unmappedNextGenFields = Sets.newHashSet(nextGenClass.fields);
-            final Set<FieldNode> unmappedCurrentGenFields = Sets.newHashSet(transitiveCurrentGenClass.fields);
+            final Set<FieldNode> unmappedNextGenFields = nextGenClass.fields.stream().collect(SetsUtil.fields((node) -> nextGenClass));
+            final Set<FieldNode> unmappedCurrentGenFields = transitiveCurrentGenClass.fields.stream().collect(SetsUtil.fields((node) -> transitiveCurrentGenClass));
 
             final MappingResult<FieldNode> transitiveFieldMapping = configuration.runtimeConfiguration().fieldMapper().map(unmappedNextGenFields, unmappedCurrentGenFields);
 
@@ -268,8 +269,8 @@ public class Jammer implements IJammer
         final BiMap<ClassNode, ClassNode> currentLastEntry = HashBiMap.create();
 
         currentClassMappings.forEach((source, target) -> {
-            final Set<MethodNode> availableMethods = new HashSet<>(target.methods);
-            final Set<FieldNode> availableFields = new HashSet<>(target.fields);
+            final Set<MethodNode> availableMethods = target.methods.stream().collect(SetsUtil.methods((node) -> target));
+            final Set<FieldNode> availableFields = target.fields.stream().collect(SetsUtil.fields((node) -> target));
 
             if (initial.classes().mappings().containsKey(source)) {
 
@@ -298,7 +299,7 @@ public class Jammer implements IJammer
         {
             final JarMappingResult next = iterator.next();
 
-            final Set<ClassNode> lastEntries = Sets.newHashSet(currentLastEntry.values());
+            final Set<ClassNode> lastEntries = currentLastEntry.values().stream().collect(SetsUtil.classes());
             for (final ClassNode lastEntry : lastEntries)
             {
                 if (next.classes().mappings().containsKey(lastEntry))
@@ -306,8 +307,8 @@ public class Jammer implements IJammer
                     final ClassNode newLastInChain = next.classes().mappings().get(lastEntry);
                     final ClassNode nextGenNode = invertedCurrentLastEntry.get(lastEntry);
 
-                    final Set<MethodNode> availableMethods = new HashSet<>(newLastInChain.methods);
-                    final Set<FieldNode> availableFields = new HashSet<>(newLastInChain.fields);
+                    final Set<MethodNode> availableMethods = newLastInChain.methods.stream().collect(SetsUtil.methods((node) -> newLastInChain));
+                    final Set<FieldNode> availableFields = newLastInChain.fields.stream().collect(SetsUtil.fields((node) -> newLastInChain));
 
                     availableMethods.removeIf(method -> !next.methods().unmappedCandidates().contains(method));
                     availableFields.removeIf(field -> !next.fields().unmappedCandidates().contains(field));
@@ -327,8 +328,8 @@ public class Jammer implements IJammer
     {
         final MappingResult<ClassNode> classMappingResult = runtimeConfiguration.classMapper().map(nextGenClasses, currentGenClasses);
 
-        final Set<MethodNode> unmappedCurrentGenMethods = new HashSet<>();
-        final Set<MethodNode> unmappedNextGenMethods = new HashSet<>();
+        final Set<MethodNode> unmappedCurrentGenMethods = Sets.newHashSet();
+        final Set<MethodNode> unmappedNextGenMethods = Sets.newHashSet();
         final BiMap<MethodNode, MethodNode> mappedMethods = HashBiMap.create();
 
         classMappingResult.unmappedCandidates().stream()
@@ -341,8 +342,11 @@ public class Jammer implements IJammer
 
         classMappingResult.mappings()
           .forEach((nextGenClass, currentGenClass) -> {
+              final Set<MethodNode> nextGenMethods = nextGenClass.methods.stream().collect(SetsUtil.methods((node) -> nextGenClass));
+              final Set<MethodNode> currentGenMethods = currentGenClass.methods.stream().collect(SetsUtil.methods((node) -> currentGenClass));
+              
               final MappingResult<MethodNode> classMethodMapping =
-                runtimeConfiguration.methodMapper().map(Sets.newHashSet(nextGenClass.methods), Sets.newHashSet(currentGenClass.methods));
+                runtimeConfiguration.methodMapper().map(nextGenMethods, currentGenMethods);
 
               unmappedCurrentGenMethods.addAll(classMethodMapping.unmappedCandidates());
               unmappedNextGenMethods.addAll(classMethodMapping.unmappedSources());
@@ -351,8 +355,8 @@ public class Jammer implements IJammer
 
         final MappingResult<MethodNode> methodMappingResult = new MappingResult<>(unmappedNextGenMethods, mappedMethods, unmappedCurrentGenMethods);
 
-        final Set<FieldNode> unmappedCurrentGenFields = new HashSet<>();
-        final Set<FieldNode> unmappedNextGenFields = new HashSet<>();
+        final Set<FieldNode> unmappedCurrentGenFields = Sets.newHashSet();
+        final Set<FieldNode> unmappedNextGenFields = Sets.newHashSet();
         final BiMap<FieldNode, FieldNode> mappedFields = HashBiMap.create();
 
         classMappingResult.unmappedCandidates().stream()
@@ -365,8 +369,11 @@ public class Jammer implements IJammer
 
         classMappingResult.mappings()
           .forEach((nextGenClass, currentGenClass) -> {
+              final Set<FieldNode> nextGenFields = nextGenClass.fields.stream().collect(SetsUtil.fields((node) -> nextGenClass));
+              final Set<FieldNode> currentGenFields = currentGenClass.fields.stream().collect(SetsUtil.fields((node) -> currentGenClass));
+              
               final MappingResult<FieldNode> classFieldMapping =
-                runtimeConfiguration.fieldMapper().map(Sets.newHashSet(nextGenClass.fields), Sets.newHashSet(currentGenClass.fields));
+                runtimeConfiguration.fieldMapper().map(nextGenFields, currentGenFields);
 
               unmappedCurrentGenFields.addAll(classFieldMapping.unmappedCandidates());
               unmappedNextGenFields.addAll(classFieldMapping.unmappedSources());
@@ -392,7 +399,7 @@ public class Jammer implements IJammer
               if (workingHistory.isEmpty())
                   return;
 
-              final Set<MethodNode> unmappedMethodsInClass = Sets.newHashSet(unmappedMethodsByOwner.get(nextGenClass));
+              final Set<MethodNode> unmappedMethodsInClass = unmappedMethodsByOwner.get(nextGenClass).stream().collect(SetsUtil.methods((node) -> nextGenClass));
               for (final HistoricalClassMapping classMapping : workingHistory)
               {
                   final MappingResult<MethodNode> mappingResult = runtimeConfiguration.methodMapper().map(unmappedMethodsInClass, classMapping.unmappedMethods());
@@ -415,7 +422,7 @@ public class Jammer implements IJammer
               if (workingHistory.isEmpty())
                   return;
 
-              final Set<FieldNode> unmappedFieldsInClass = Sets.newHashSet(unmappedFieldsByOwner.get(nextGenClass));
+              final Set<FieldNode> unmappedFieldsInClass = unmappedFieldsByOwner.get(nextGenClass).stream().collect(SetsUtil.fields((node) -> nextGenClass));
               for (final HistoricalClassMapping classMapping : workingHistory)
               {
                   final MappingResult<FieldNode> mappingResult = runtimeConfiguration.fieldMapper().map(unmappedFieldsInClass, classMapping.unmappedFields());
@@ -462,8 +469,6 @@ public class Jammer implements IJammer
 
         return classIds;
     }
-
-
 
     private BiMap<FieldNode, Integer> determineFieldIds(
       final BiMap<FieldNode, FieldNode> mappedFields,

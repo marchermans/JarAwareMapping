@@ -3,6 +3,7 @@ package com.ldtteam.jam.ast;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import com.ldtteam.jam.spi.asm.IASMData;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataClass;
@@ -12,6 +13,7 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
+import com.ldtteam.jam.util.SetsUtil;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -97,7 +99,7 @@ public class NamedASTBuilder implements INamedASTBuilder {
                 .collect(Collectors.toMap(INameProvider.classes(), Function.identity()));
 
         return classes.stream()
-                .collect(Collectors.toMap(Function.identity(), classNode -> getInheritanceOf(classNodesByName, classNode.name, new HashSet<>())));
+                .collect(Collectors.toMap(Function.identity(), classNode -> getInheritanceOf(classNodesByName, classNode.name, Sets.newHashSet())));
     }
 
     private LinkedList<ClassNode> getInheritanceOf(final Map<String, ClassNode> classNodesByName, final String className, final Set<ClassNode> superTypes)
@@ -296,8 +298,8 @@ public class NamedASTBuilder implements INamedASTBuilder {
     public Set<Set<MethodNode>> buildOverrideTrees(
       final Multimap<MethodNode, MethodNode> overrides
     ) {
-        final Set<MethodNode> processedNode = new HashSet<>();
-        final Set<Set<MethodNode>> combinedTrees = new HashSet<>();
+        final Set<MethodNode> processedNode = Sets.newHashSet();
+        final Set<Set<MethodNode>> combinedTrees = Sets.newHashSet();
         final Map<MethodNode, Collection<MethodNode>> overrideBranchMap = overrides.asMap();
 
         overrideBranchMap.keySet().forEach(
@@ -316,7 +318,7 @@ public class NamedASTBuilder implements INamedASTBuilder {
               }
 
               processedNode.add(overridenMethod);
-              final Set<MethodNode> workingSet = new HashSet<>(overrides.get(overridenMethod));
+              final Set<MethodNode> workingSet = Sets.newHashSet(overrides.get(overridenMethod));
               for (final Collection<MethodNode> overrideBranch : overrideBranchMap.values())
               {
                   if (overrideBranch.stream().anyMatch(workingSet::contains))

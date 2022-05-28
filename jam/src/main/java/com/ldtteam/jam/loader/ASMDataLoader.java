@@ -4,6 +4,7 @@ import com.ldtteam.jam.rename.EnhancedClassRemapper;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.util.FilterUtils;
+import com.ldtteam.jam.util.SetsUtil;
 import com.machinezoo.noexception.Exceptions;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -19,6 +20,7 @@ import java.io.InputStream;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -57,16 +59,14 @@ public final class ASMDataLoader
         }
 
         //Grab the method nodes from them
-        final Set<MethodNode> methods = new TreeSet<>(Comparator.<MethodNode, String>comparing(node -> classNodesByMethodNodes.get(node).name).thenComparing(node -> node.name + node.desc));
-        classes.stream()
+        final Set<MethodNode> methods = classes.stream()
           .flatMap(classNode -> classNode.methods.stream())
-          .forEach(methods::add);
+          .collect(SetsUtil.methods(classNodesByMethodNodes));
 
         //And the field nodes from them
-        final Set<FieldNode> fields = new TreeSet<>(Comparator.<FieldNode, String>comparing(node -> classNodesByFieldNodes.get(node).name).thenComparing(node -> node.name + node.desc));
-        classes.stream()
+        final Set<FieldNode> fields = classes.stream()
           .flatMap(classNode -> classNode.fields.stream())
-          .forEach(fields::add);
+          .collect(SetsUtil.fields(classNodesByFieldNodes));
 
         //Collect all of them together.
         return new LoadedASMData(inputConfiguration.name(), classes, methods, fields);

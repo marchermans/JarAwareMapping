@@ -3,9 +3,11 @@ package com.ldtteam.jam.mapping;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.ldtteam.jam.spi.mapping.IMapper;
 import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.spi.name.INameProvider;
+import com.ldtteam.jam.util.SetsUtil;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -71,7 +73,7 @@ public class AlignedMapper<N> implements IMapper<N>
         final SortedSet<N> sortedCandidates = new TreeSet<>(sorter);
         sortedCandidates.addAll(candidates);
 
-        final Set<N> unmappedSources = new HashSet<>();
+        final Set<N> unmappedSources = Sets.newHashSet();
         final BiMap<N, N> mappings = HashBiMap.create();
 
         while(!sortedSources.isEmpty()) {
@@ -89,6 +91,6 @@ public class AlignedMapper<N> implements IMapper<N>
             unmappedSources.addAll(innerResult.unmappedSources());
         }
 
-        return new MappingResult<>(unmappedSources, mappings, new HashSet<>(sortedCandidates));
+        return new MappingResult<>(unmappedSources, mappings, SetsUtil.cloneSet(unmappedSources));
     }
 }

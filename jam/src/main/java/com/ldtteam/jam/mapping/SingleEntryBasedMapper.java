@@ -4,6 +4,7 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.ldtteam.jam.spi.mapping.IMapper;
 import com.ldtteam.jam.spi.mapping.MappingResult;
+import com.ldtteam.jam.util.SetsUtil;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -14,8 +15,8 @@ abstract class SingleEntryBasedMapper<T> implements IMapper<T>
     @Override
     public MappingResult<T> map(final Set<T> sources, final Set<T> candidates)
     {
-        final Set<T> unmappedSources = new HashSet<>(sources);
-        final Set<T> unmappedCandidates = new HashSet<>(candidates);
+        final Set<T> unmappedSources = SetsUtil.cloneSet(sources);
+        final Set<T> unmappedCandidates = SetsUtil.cloneSet(candidates);
         final BiMap<T, T> mappings = HashBiMap.create(sources.size());
 
         sources.forEach(source -> {

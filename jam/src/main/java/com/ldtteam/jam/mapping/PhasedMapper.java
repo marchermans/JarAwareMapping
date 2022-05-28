@@ -4,6 +4,7 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.ldtteam.jam.spi.mapping.IMapper;
 import com.ldtteam.jam.spi.mapping.MappingResult;
+import com.ldtteam.jam.util.SetsUtil;
 
 import java.util.*;
 
@@ -28,13 +29,13 @@ public final class PhasedMapper<T> implements IMapper<T>
     @Override
     public MappingResult<T> map(final Set<T> sources, final Set<T> candidates)
     {
-        final Set<T> unmappedSources = new HashSet<>(sources);
-        final Set<T> unmappedCandidates = new HashSet<>(candidates);
+        final Set<T> unmappedSources = SetsUtil.cloneSet(sources);
+        final Set<T> unmappedCandidates = SetsUtil.cloneSet(candidates);
         final BiMap<T, T> mappings = HashBiMap.create(sources.size());
 
         for (final IMapper<T> phase : phases) {
-            final Set<T> phaseUnmappedSources = new HashSet<>(unmappedSources);
-            final Set<T> phaseUnmappedCandidates = new HashSet<>(unmappedCandidates);
+            final Set<T> phaseUnmappedSources = SetsUtil.cloneSet(unmappedSources);
+            final Set<T> phaseUnmappedCandidates = SetsUtil.cloneSet(unmappedCandidates);
 
             final MappingResult<T> phaseResult = phase.map(phaseUnmappedSources, phaseUnmappedCandidates);
 
