@@ -1,6 +1,7 @@
 package com.ldtteam.jam.mcpconfig;
 
 import com.ldtteam.jam.mapping.*;
+import com.ldtteam.jam.matching.instructionlist.DirectInstructionListMatcher;
 import com.ldtteam.jam.spi.configuration.MappingRuntimeConfiguration;
 
 public class TSRGMappingRuntimeConfiguration
@@ -17,11 +18,11 @@ public class TSRGMappingRuntimeConfiguration
           LambdaAwareMethodMapper.create(
             PhasedMapper.create(
               NameBasedMapper.methods(),
-              ByteCodeBasedMethodMapper.create()
+              ByteCodeBasedMethodMapper.create(DirectInstructionListMatcher.create())
             ),
             PhasedMapper.create(
               AlignedMapper.methods(
-                ByteCodeBasedMethodMapper.create()
+                ByteCodeBasedMethodMapper.create(DirectInstructionListMatcher.create())
               ),
               NameBasedMapper.methods()
             )
