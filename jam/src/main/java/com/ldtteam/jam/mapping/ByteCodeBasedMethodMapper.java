@@ -11,13 +11,13 @@ import java.util.Set;
 public final class ByteCodeBasedMethodMapper extends SingleEntryBasedMapper<MethodNode>
 {
 
-    private final IMatcher matcher;
+    private final IMatcher<InsnList> matcher;
 
-    public static IMapper<MethodNode> create(final IMatcher matcher) {
+    public static IMapper<MethodNode> create(final IMatcher<InsnList> matcher) {
         return new ByteCodeBasedMethodMapper(matcher);
     }
 
-    private ByteCodeBasedMethodMapper(IMatcher matcher)
+    private ByteCodeBasedMethodMapper(IMatcher<InsnList> matcher)
     {
         this.matcher = matcher;
     }

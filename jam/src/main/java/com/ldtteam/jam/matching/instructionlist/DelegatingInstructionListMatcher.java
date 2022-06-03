@@ -9,6 +9,7 @@ import java.util.List;
 
 public class DelegatingInstructionListMatcher<TType> implements IMatcher<TType> {
 
+    @SafeVarargs
     public static <TMatchType> IMatcher<TMatchType> create(final IMatcher<TMatchType>... matchers) {
         return new DelegatingInstructionListMatcher<>(Arrays.asList(matchers));
     }

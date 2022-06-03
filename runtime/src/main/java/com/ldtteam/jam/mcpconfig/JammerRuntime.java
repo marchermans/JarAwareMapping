@@ -18,9 +18,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public final class JammerRuntime
 {
@@ -105,12 +105,24 @@ public final class JammerRuntime
           .withRequiredArg()
           .ofType(File.class);
 
-        final AbstractOptionSpec<Boolean> writeLambdaMetaInformation = parser.acceptsAll(
+        final AbstractOptionSpec<Boolean> writeLambdaMetaInformationOption = parser.acceptsAll(
           Lists.newArrayList("writeLambdaMetaInformation", "wli"),
           "Indicates if the writer needs to write the lambda meta information.")
          .withOptionalArg()
          .ofType(Boolean.class)
          .defaultsTo(false);
+
+        final AbstractOptionSpec<Integer> mappingMinimalBytecodeSizesOption = parser.acceptsAll(
+            Lists.newArrayList("mappingMinimalBytecodeSizes", "mmbcs"),
+            "The minimal bytecode sizes of the methods to map.")
+                                                                          .withOptionalArg()
+                                                                          .ofType(Integer.class);
+
+        final AbstractOptionSpec<Float> mappingMinimalByteCodeMatchPercentageOption = parser.acceptsAll(
+            Lists.newArrayList("mappingMinimalByteCodeMatchPercentage", "mmbcm"),
+            "The minimal bytecode match percentage of the methods to map.")
+                                                                          .withOptionalArg()
+                                                                          .ofType(Float.class);
 
         final OptionSet parsed = parser.parse(args);
 
@@ -126,7 +138,10 @@ public final class JammerRuntime
 
         final File outputPath = parsed.valueOf(outputPathOption);
 
-        final boolean writeLambdaMetaInformationValue = parsed.valueOf(writeLambdaMetaInformation);
+        final boolean writeLambdaMetaInformationValue = parsed.valueOf(writeLambdaMetaInformationOption);
+
+        final List<Integer> mappingMinimalBytecodeSizes = parsed.valuesOf(mappingMinimalBytecodeSizesOption);
+        final List<Float> mappingMinimalByteCodeMatchPercentage = parsed.valuesOf(mappingMinimalByteCodeMatchPercentageOption);
 
         if (existingNames.size() != existingJars.size() || existingNames.size() != existingMappings.size() || existingNames.size() != existingIdentifiers.size())
         {
@@ -137,6 +152,12 @@ public final class JammerRuntime
         if (existingNames.size() == 0)
         {
             LOGGER.error("No existing names were given.");
+            return;
+        }
+
+        if (mappingMinimalBytecodeSizes.size() != mappingMinimalByteCodeMatchPercentage.size())
+        {
+            LOGGER.error("The number of minimal bytecode sizes and minimal bytecode match percentages must be equal.");
             return;
         }
 
@@ -167,7 +188,15 @@ public final class JammerRuntime
           new MetadataWritingConfiguration(writeLambdaMetaInformationValue)
         );
 
-        final MappingRuntimeConfiguration runtimeConfiguration = mappingRuntimeConfigurationProducer.create();
+        final Map<Integer, Float> mappingThresholdPercentages = IntStream.range(0, mappingMinimalBytecodeSizes.size())
+                                                                  .boxed()
+                                                                  .collect(Collectors.toMap(mappingMinimalBytecodeSizes::get,
+                                                                    mappingMinimalByteCodeMatchPercentage::get,
+                                                                    (a, b) -> b));
+
+        final MappingConfiguration mappingConfiguration = new MappingConfiguration(mappingThresholdPercentages);
+
+        final MappingRuntimeConfiguration runtimeConfiguration = mappingRuntimeConfigurationProducer.create(mappingConfiguration);
 
         final Configuration configuration = new Configuration(
           inputConfigurations,
@@ -224,6 +253,6 @@ public final class JammerRuntime
     @FunctionalInterface
     public interface IMappingRuntimeConfigurationProducer
     {
-        MappingRuntimeConfiguration create();
+        MappingRuntimeConfiguration create(MappingConfiguration configuration);
     }
 }
