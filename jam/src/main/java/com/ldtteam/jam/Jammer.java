@@ -10,6 +10,7 @@ import com.ldtteam.jam.spi.configuration.OutputConfiguration;
 import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.loader.ASMDataLoader;
 import com.ldtteam.jam.loader.LoadedASMData;
+import com.ldtteam.jam.statistics.MappingStatistics;
 import com.ldtteam.jam.util.SetsUtil;
 import com.machinezoo.noexception.Exceptions;
 import org.objectweb.asm.Opcodes;
@@ -92,6 +93,9 @@ public class Jammer implements IJammer
         final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitionMappings = buildTransitionMap(configuration, dataByInputName);
         final JarMappingResult lastMappingResult = transitionMappings.values().iterator().next();
 
+        LOGGER.info("Collecting primary mapping statistics...");
+        MappingStatistics mappingStatistics = collectMappingStatistics(lastMappingResult);
+
         LOGGER.info("Reconstructing transitively lost class mappings...");
         final Set<ClassNode> unmappedClasses = Sets.newHashSet(lastMappingResult.classes().unmappedSources());
         final Set<MethodNode> unmappedMethods = Sets.newHashSet(lastMappingResult.methods().unmappedSources());
@@ -111,6 +115,7 @@ public class Jammer implements IJammer
         unmappedClasses.removeAll(additionallyMappedClasses.keySet());
 
         LOGGER.info("Reconstructing transitively lost method mappings...");
+        final Set<MethodNode> rejuvenatedMethods = Sets.newHashSet();
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no methods inside this will be mapped.
             final Set<MethodNode> unmappedNextGenMethods = nextGenClass.methods.stream().collect(SetsUtil.methods((node) -> nextGenClass));
@@ -120,9 +125,11 @@ public class Jammer implements IJammer
 
             unmappedMethods.removeAll(transitiveMethodMapping.mappings().keySet());
             mappedMethods.putAll(transitiveMethodMapping.mappings());
+            rejuvenatedMethods.addAll(transitiveMethodMapping.mappings().keySet());
         });
 
         LOGGER.info("Reconstructing transitively lost field mappings...");
+        final Set<FieldNode> rejuvenatedFields = Sets.newHashSet();
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no fields inside this will be mapped.
             final Set<FieldNode> unmappedNextGenFields = nextGenClass.fields.stream().collect(SetsUtil.fields((node) -> nextGenClass));
@@ -132,18 +139,27 @@ public class Jammer implements IJammer
 
             unmappedFields.removeAll(transitiveFieldMapping.mappings().keySet());
             mappedFields.putAll(transitiveFieldMapping.mappings());
+            rejuvenatedFields.addAll(transitiveFieldMapping.mappings().keySet());
         });
+
+        LOGGER.info("Collecting rejuvenation statistics...");
+        collectRejuvenationStatistics(mappingStatistics, additionallyMappedClasses, rejuvenatedMethods, rejuvenatedFields);
 
         LOGGER.info("Building transitive class mappings...");
         Map<ClassNode, List<HistoricalClassMapping>> transitiveClassMappings = buildTransitiveClassMappings(mappedClasses, transitionMappings.values());
 
         LOGGER.info("Building transitive method mappings...");
         final BiMap<MethodNode, MethodNode> transitiveMethodMappings = mapMethodsTransitively(unmappedMethods, classNodesByMethodNodes, transitiveClassMappings, configuration.runtimeConfiguration());
+        unmappedMethods.removeAll(transitiveMethodMappings.keySet());
         mappedMethods.putAll(transitiveMethodMappings);
         
         LOGGER.info("Building transitive field mappings...");
         final BiMap<FieldNode, FieldNode> transitiveFieldMappings = mapFieldsTransitively(unmappedFields, classNodesByFieldNodes, transitiveClassMappings, configuration.runtimeConfiguration());
+        unmappedFields.removeAll(transitiveFieldMappings.keySet());
         mappedFields.putAll(transitiveFieldMappings);
+
+        LOGGER.info("Collecting renaming statistics...");
+        collectRenamingStatistics(mappingStatistics, transitiveMethodMappings, transitiveFieldMappings);
 
         LOGGER.info("Determining class ids...");
         final BiMap<ClassNode, Integer> classIds = determineClassIds(mappedClasses, unmappedClasses, configurationNameByClassNodes, configurationsByName, configuration.outputConfiguration());
@@ -152,11 +168,72 @@ public class Jammer implements IJammer
         final BiMap<FieldNode, Integer> fieldIds = determineFieldIds(mappedFields, unmappedFields, classNodesByFieldNodes, configurationNameByFieldNodes, configurationsByName, configuration.outputConfiguration());
 
         LOGGER.info("Determining method and parameter ids...");
-        final MethodIdMappingResult methodIdMappingResult = determineMethodIds(mappedMethods, unmappedMethods, classNodesByMethodNodes, configurationNameByMethodNodes, configurationsByName, configuration.outputConfiguration(), data);
+        final MethodIdMappingResult methodIdMappingResult = determineMethodIds(mappedMethods, unmappedMethods, classNodesByMethodNodes, configurationNameByMethodNodes, configurationsByName, configuration.outputConfiguration());
 
         LOGGER.info("Writing mappings...");
         final LoadedASMData targetASMData = dataByInputName.get(Objects.requireNonNull(configuration.inputs().get(configuration.inputs().size() - 1)).name());
         writeOutput(classIds, methodIdMappingResult.methodIds(), fieldIds, methodIdMappingResult.parameterIds(), configuration.outputConfiguration(), targetASMData);
+
+        LOGGER.info("Collecting total statistics...");
+        collectTotalStatistics(mappingStatistics, mappedClasses, mappedMethods, mappedFields, unmappedClasses, unmappedMethods, unmappedFields);
+
+        LOGGER.info("Writing statistics...");
+        writeStatistics(mappingStatistics, configuration);
+    }
+
+    private void writeStatistics(final MappingStatistics mappingStatistics, final Configuration configuration)
+    {
+        configuration.outputConfiguration().statisticsWriter().write(
+          configuration.outputConfiguration().outputDirectory(),
+          mappingStatistics,
+          configuration
+        );
+    }
+
+    private void collectTotalStatistics(
+      final MappingStatistics mappingStatistics,
+      final BiMap<ClassNode, ClassNode> mappedClasses,
+      final BiMap<MethodNode, MethodNode> mappedMethods,
+      final BiMap<FieldNode, FieldNode> mappedFields,
+      final Set<ClassNode> unmappedClasses,
+      final Set<MethodNode> unmappedMethods,
+      final Set<FieldNode> unmappedFields)
+    {
+        mappingStatistics.getTotalClassStatistics().load(0, mappedClasses.size(), unmappedClasses.size());
+        mappingStatistics.getTotalMethodStatistics().load(0, mappedMethods.size(), unmappedMethods.size());
+        mappingStatistics.getTotalFieldStatistics().load(0, mappedFields.size(), unmappedFields.size());
+    }
+
+    private void collectRenamingStatistics(
+      final MappingStatistics statistics,
+      final BiMap<MethodNode, MethodNode> transitiveMethodMappings,
+      final BiMap<FieldNode, FieldNode> transitiveFieldMappings)
+    {
+        statistics.getRenamedClassStatistics().load(0,0,0); //Renaming never happens, jammer for now does not support this scenario.
+        statistics.getRenamedMethodStatistics().load(0, transitiveMethodMappings.size(), 0);
+        statistics.getRenamedFieldStatistics().load(0, transitiveFieldMappings.size(), 0);
+    }
+
+    private void collectRejuvenationStatistics(
+      final MappingStatistics statistics,
+      final BiMap<ClassNode, ClassNode> additionallyMappedClasses,
+      final Set<MethodNode> rejuvenatedMethods,
+      final Set<FieldNode> rejuvenatedFields)
+    {
+        statistics.getRejuvenatedClassStatistics().load(0, additionallyMappedClasses.size(), 0); //This phase can not find or lose any entries.
+        statistics.getRejuvenatedMethodStatistics().load(0, rejuvenatedMethods.size(), 0);
+        statistics.getRejuvenatedFieldStatistics().load(0, rejuvenatedFields.size(), 0);
+    }
+
+    private MappingStatistics collectMappingStatistics(final JarMappingResult lastMappingResult)
+    {
+        final MappingStatistics statistics = new MappingStatistics();
+
+        statistics.getDirectClassStatistics().loadFromMappingResult(lastMappingResult.classes());
+        statistics.getDirectMethodStatistics().loadFromMappingResult(lastMappingResult.methods());
+        statistics.getDirectFieldStatistics().loadFromMappingResult(lastMappingResult.fields());
+
+        return statistics;
     }
 
     private void validateConfiguration(final Configuration configuration)
@@ -510,8 +587,7 @@ public class Jammer implements IJammer
       final Map<MethodNode, ClassNode> classNodesByMethodNodes,
       final Map<MethodNode, String> configurationNameByMethodNodes,
       final Map<String, InputConfiguration> configurationsByName,
-      final OutputConfiguration outputConfiguration,
-      final Set<LoadedASMData> data
+      final OutputConfiguration outputConfiguration
     ) {
         final BiMap<MethodNode, Integer> methodIds = HashBiMap.create();
         final BiMap<ParameterNode, Integer> parameterIds = HashBiMap.create();

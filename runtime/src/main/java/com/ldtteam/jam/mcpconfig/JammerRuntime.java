@@ -10,6 +10,7 @@ import com.ldtteam.jam.spi.metadata.IMetadataASTBuilder;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.Jammer;
 import com.ldtteam.jam.spi.writer.INamedASTOutputWriter;
+import com.ldtteam.jam.spi.writer.IStatisticsWriter;
 import joptsimple.AbstractOptionSpec;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
@@ -32,8 +33,8 @@ public final class JammerRuntime
     private final INamedASTBuilderProducer      namedASTProducer;
     private final IMetadataASTBuilderProducer   metadataASTProducer;
     private final INamedASTOutputWriterProducer namedASTOutputWriterProducer;
-
     private final IMappingRuntimeConfigurationProducer mappingRuntimeConfigurationProducer;
+    private final IStatisticsWriterProducer statisticsWriterProducer;
 
     public JammerRuntime(
       final IRemapperProducer obfuscatedToOfficialRemapperProducer,
@@ -42,7 +43,7 @@ public final class JammerRuntime
       final INamedASTBuilderProducer namedASTProducer,
       final IMetadataASTBuilderProducer metadataASTProducer,
       final INamedASTOutputWriterProducer namedASTOutputWriterProducer,
-      final IMappingRuntimeConfigurationProducer mappingRuntimeConfigurationProducer) {
+      final IMappingRuntimeConfigurationProducer mappingRuntimeConfigurationProducer, final IStatisticsWriterProducer statisticsWriterProducer) {
         this.obfuscatedToOfficialRemapperProducer = obfuscatedToOfficialRemapperProducer;
         this.existingIdentitySupplierProducer = existingIdentitySupplierProducer;
         this.newIdentitySupplierProducer = newIdentitySupplierProducer;
@@ -50,6 +51,7 @@ public final class JammerRuntime
         this.metadataASTProducer = metadataASTProducer;
         this.namedASTOutputWriterProducer = namedASTOutputWriterProducer;
         this.mappingRuntimeConfigurationProducer = mappingRuntimeConfigurationProducer;
+        this.statisticsWriterProducer = statisticsWriterProducer;
     }
 
     public void run(String[] args)
@@ -124,6 +126,19 @@ public final class JammerRuntime
                                                                           .withOptionalArg()
                                                                           .ofType(Float.class);
 
+        final AbstractOptionSpec<Boolean> writeStatisticsToDiskOption = parser.acceptsAll(
+            Lists.newArrayList("writeStatisticsToDisk", "wsd"),
+            "Indicates if the writer needs to write the statistics to disk.")
+                                                                          .withOptionalArg()
+                                                                          .ofType(boolean.class)
+                                                                          .defaultsTo(true);
+        final AbstractOptionSpec<Boolean> writeStatisticsToLogOption = parser.acceptsAll(
+            Lists.newArrayList("writeStatisticsToLog", "wsl"),
+            "Indicates if the writer needs to write the statistics to the log.")
+                                                                          .withOptionalArg()
+                                                                          .ofType(boolean.class)
+                                                                          .defaultsTo(true);
+
         final OptionSet parsed = parser.parse(args);
 
         final List<String> existingNames = parsed.valuesOf(existingNamesOption);
@@ -142,6 +157,9 @@ public final class JammerRuntime
 
         final List<Integer> mappingMinimalBytecodeSizes = parsed.valuesOf(mappingMinimalBytecodeSizesOption);
         final List<Float> mappingMinimalByteCodeMatchPercentage = parsed.valuesOf(mappingMinimalByteCodeMatchPercentageOption);
+
+        final boolean shouldWriteStatisticsToDisk = parsed.valueOf(writeStatisticsToDiskOption);
+        final boolean shouldWriteStatisticsToLog = parsed.valueOf(writeStatisticsToLogOption);
 
         if (existingNames.size() != existingJars.size() || existingNames.size() != existingMappings.size() || existingNames.size() != existingIdentifiers.size())
         {
@@ -185,7 +203,9 @@ public final class JammerRuntime
           namedASTProducer.from(inputMapping.toPath()),
           metadataASTProducer.from(inputMetadata.toPath()),
           namedASTOutputWriterProducer.create(),
-          new MetadataWritingConfiguration(writeLambdaMetaInformationValue)
+          statisticsWriterProducer.create(),
+          new MetadataWritingConfiguration(writeLambdaMetaInformationValue),
+          new StatisticsWritingConfiguration(shouldWriteStatisticsToDisk, shouldWriteStatisticsToLog)
         );
 
         final Map<Integer, Float> mappingThresholdPercentages = IntStream.range(0, mappingMinimalBytecodeSizes.size())
@@ -254,5 +274,11 @@ public final class JammerRuntime
     public interface IMappingRuntimeConfigurationProducer
     {
         MappingRuntimeConfiguration create(MappingConfiguration configuration);
+    }
+
+    @FunctionalInterface
+    public interface IStatisticsWriterProducer
+    {
+        IStatisticsWriter create();
     }
 }

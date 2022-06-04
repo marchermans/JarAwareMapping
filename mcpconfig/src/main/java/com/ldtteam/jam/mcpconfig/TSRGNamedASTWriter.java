@@ -12,6 +12,8 @@ import java.nio.file.Path;
 
 public class TSRGNamedASTWriter implements INamedASTOutputWriter {
 
+    private static final String JOINED_TSRG_FILE_NAME = "joined.tsrg";
+
     public static INamedASTOutputWriter create() {
         return new TSRGNamedASTWriter();
     }
@@ -69,7 +71,7 @@ public class TSRGNamedASTWriter implements INamedASTOutputWriter {
         final INamedMappingFile mappingFile = builder.build();
         Exceptions.sneak().run(
                 () -> mappingFile.write(
-                        outputDirectory.resolve("joined.tsrg"),
+                        outputDirectory.resolve(JOINED_TSRG_FILE_NAME),
                         IMappingFile.Format.TSRG2
                 )
         );

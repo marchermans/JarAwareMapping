@@ -11,8 +11,8 @@ public class Main
           TSRGNamedASTBuilder::ast,
           TSRGMetadataASTBuilder::create,
           TSRGNamedASTWriter::create,
-          TSRGMappingRuntimeConfiguration::create
-        );
+          TSRGMappingRuntimeConfiguration::create,
+          TSRGStatisticsWriter::create);
 
         runtime.run(args);
     }
