@@ -127,7 +127,9 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
             for (final IMetadataRecordComponent recordInfo : classMetadata.getRecords())
             {
                 final Optional<String> officialRecordDescriptor = metadataToRuntimeRemapper.remapDescriptor(recordInfo.getDesc());
-                if (isRecordComponentForMethod(methodNode, obfuscatedMethodName, recordInfo, officialRecordDescriptor))
+                final Optional<String> officialClassName = metadataToRuntimeRemapper.remapClass(classNode.name);
+                if (officialClassName.isPresent() &&
+                      isRecordComponentForMethod(methodNode, obfuscatedMethodName, officialClassName.get(), recordInfo, officialRecordDescriptor))
                 {
                     if (identifiedFieldNamesByOriginalName.containsKey(recordInfo.getField()))
                     {
@@ -175,8 +177,12 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
         );
     }
 
-    private boolean isRecordComponentForMethod(MethodNode methodNode, String obfuscatedMethodName, IMetadataRecordComponent recordInfo, Optional<String> officialRecordDescriptor) {
-        return officialRecordDescriptor.isPresent() && recordInfo.getMethods() != null && methodNode.desc.endsWith(officialRecordDescriptor.get()) && recordInfo.getMethods().contains(obfuscatedMethodName);
+    private boolean isRecordComponentForMethod(MethodNode methodNode, String obfuscatedMethodName, String obfuscatedClassName, IMetadataRecordComponent recordInfo, Optional<String> officialRecordDescriptor) {
+        return officialRecordDescriptor.isPresent() && recordInfo.getMethods() != null
+                 && methodNode.desc.endsWith(officialRecordDescriptor.get())
+                 && recordInfo.getMethods().contains(obfuscatedMethodName)
+                 && metadataToRuntimeRemapper.remapField(obfuscatedClassName, recordInfo.getField(), recordInfo.getDesc())
+                      .map(name -> name.equals(methodNode.name)).orElse(false);
     }
 
     private boolean isValidOverriddenMethod(Map<String, ClassNode> classNodesByAstName, IMetadataMethodReference override, MethodNode candidate) {
