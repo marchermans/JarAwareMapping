@@ -53,6 +53,10 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
             final BiMap<MethodNode, Integer> methodIds,
             final BiMap<ParameterNode, Integer> parameterIds
     ) {
+        if (classNode.name.contains("SpawnData") && methodNode.name.contains("entity")) {
+            System.out.println("");
+        }
+
         final String obfuscatedDescriptor = runtimeToASTRemapper.remapDescriptor(methodNode.desc)
                 .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor of method: %s in class: %s".formatted(methodNode.name, classNode.name)));
         final String obfuscatedMethodName = runtimeToASTRemapper.remapMethod(classNode.name, methodNode.name, methodNode.desc)
@@ -127,9 +131,9 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
             for (final IMetadataRecordComponent recordInfo : classMetadata.getRecords())
             {
                 final Optional<String> officialRecordDescriptor = metadataToRuntimeRemapper.remapDescriptor(recordInfo.getDesc());
-                final Optional<String> officialClassName = metadataToRuntimeRemapper.remapClass(classNode.name);
-                if (officialClassName.isPresent() &&
-                      isRecordComponentForMethod(methodNode, obfuscatedMethodName, officialClassName.get(), recordInfo, officialRecordDescriptor))
+                final Optional<String> obfuscatedClassname = runtimeToASTRemapper.remapClass(classNode.name);
+                if (obfuscatedClassname.isPresent() &&
+                      isRecordComponentForMethod(methodNode, obfuscatedMethodName, obfuscatedClassname.get(), recordInfo, officialRecordDescriptor))
                 {
                     if (identifiedFieldNamesByOriginalName.containsKey(recordInfo.getField()))
                     {
