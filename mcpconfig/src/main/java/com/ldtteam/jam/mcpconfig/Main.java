@@ -7,6 +7,7 @@ public class Main
         final JammerRuntime runtime = new JammerRuntime(
           TSRGRemapper::createObfuscatedToOfficial,
           TSRGIdentitySupplier::create,
+          TSRGExistingNameSupplier::create,
           TSRGNewIdentitySupplier::create,
           TSRGNamedASTBuilder::ast,
           TSRGMetadataASTBuilder::create,

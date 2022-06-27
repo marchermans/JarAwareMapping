@@ -22,7 +22,6 @@ public final class EnhancedClassRemapper extends ClassRemapper
 
     @Override
     public MethodVisitor visitMethod(final int access, final String mname, final String mdescriptor, final String msignature, final String[] exceptions) {
-        //System.out.println("Method: " + className + '/' + mname + mdescriptor);
         String remappedDescriptor = remapper.mapMethodDesc(mdescriptor);
         MethodVisitor methodVisitor = cv.visitMethod(
           access,

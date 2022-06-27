@@ -4,36 +4,47 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.mapping.IMapper;
 import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.util.SetsUtil;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
-public class AlignedMapper<N> implements IMapper<N>
+public final class AlignedMapper<N> implements IMapper<N>
 {
 
-    public static IMapper<ClassNode> classes(final IMapper<ClassNode> inner) {
+    public static IMapper<ClassData> classes(final IMapper<ClassData> inner) {
         return create(
           INameProvider.classes(),
           inner
         );
     }
 
-    public static IMapper<MethodNode> methods(final IMapper<MethodNode> inner) {
+    public static IMapper<MethodData> methods(final IMapper<MethodData> inner) {
         return create(
           INameProvider.methods(),
           inner
         );
     }
 
-    public static IMapper<FieldNode> fields(final IMapper<FieldNode> inner) {
+    public static IMapper<FieldData> fields(final IMapper<FieldData> inner) {
         return create(
           INameProvider.fields(),
+          inner
+        );
+    }
+
+    public static IMapper<ParameterData> parameters(final IMapper<ParameterData> inner) {
+        return create(
+          Comparator.comparing(ParameterData::index),
           inner
         );
     }

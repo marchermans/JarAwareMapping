@@ -1,7 +1,7 @@
 package com.ldtteam.jam.mapping;
 
+import com.ldtteam.jam.spi.asm.MethodData;
 import com.ldtteam.jam.spi.mapping.IMapper;
-import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.spi.matching.IMatcher;
 import com.ldtteam.jam.spi.matching.MatchingResult;
 import org.objectweb.asm.Opcodes;
@@ -9,14 +9,17 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class ConstantBooleanReturnValuesFlippedMethodMapper extends SingleEntryBasedMapper<MethodNode>
+public final class ConstantBooleanReturnValuesFlippedMethodMapper extends SingleEntryBasedMapper<MethodData>
 {
 
-    public static IMapper<MethodNode> create(final IMatcher<InsnList> remainderMatcher) {
+    public static IMapper<MethodData> create(final IMatcher<InsnList> remainderMatcher) {
         return new ConstantBooleanReturnValuesFlippedMethodMapper(remainderMatcher);
     }
 
@@ -28,32 +31,32 @@ public class ConstantBooleanReturnValuesFlippedMethodMapper extends SingleEntryB
     }
 
     @Override
-    protected Optional<MethodNode> map(final MethodNode source, final Set<MethodNode> candidates)
+    protected Optional<MethodData> map(final MethodData source, final Set<MethodData> candidates)
     {
         //Return type of the source is a boolean
-        if (!source.desc.endsWith(")Z")) {
+        if (!source.node().desc.endsWith(")Z")) {
             return Optional.empty();
         }
 
-        record MatchingResultForCandidate(MethodNode candidate, MatchingResult result) { }
+        record MatchingResultForCandidate(MethodData candidate, MatchingResult result) { }
         return candidates.stream().map(candidate -> new MatchingResultForCandidate(candidate, map(source, candidate)))
                  .filter(result -> result.result() != MatchingResult.UNKNOWN)
                  .findFirst()
                  .flatMap(result -> result.result() == MatchingResult.MATCH ? Optional.of(result.candidate()) : Optional.empty());
     }
 
-    private MatchingResult map(final MethodNode source, final MethodNode candidate) {
-        if (source.instructions.size() != candidate.instructions.size())
+    private MatchingResult map(final MethodData source, final MethodData candidate) {
+        if (source.node().instructions.size() != candidate.node().instructions.size())
             return MatchingResult.FAIL;
 
-        final Set<Integer> returnIndices = IntStream.range(0, source.instructions.size())
-                                             .filter(i -> source.instructions.get(i).getOpcode() == Opcodes.IRETURN)
+        final Set<Integer> returnIndices = IntStream.range(0, source.node().instructions.size())
+                                             .filter(i -> source.node().instructions.get(i).getOpcode() == Opcodes.IRETURN)
                                              .boxed()
                                              .collect(Collectors.toSet());
 
         final List<Integer> sourceReturnedValueOpIndices = returnIndices
                                                              .stream()
-                                                             .map(source.instructions::get)
+                                                             .map(source.node().instructions::get)
                                                              .map(AbstractInsnNode::getPrevious)
                                                              .filter(Objects::nonNull)
                                                              .mapToInt(AbstractInsnNode::getOpcode)
@@ -61,7 +64,7 @@ public class ConstantBooleanReturnValuesFlippedMethodMapper extends SingleEntryB
 
         final List<Integer> candidateReturnedValueOpIndices = returnIndices
                                                                 .stream()
-                                                                .map(candidate.instructions::get)
+                                                                .map(candidate.node().instructions::get)
                                                                 .map(AbstractInsnNode::getPrevious)
                                                                 .filter(Objects::nonNull)
                                                                 .mapToInt(AbstractInsnNode::getOpcode)
@@ -78,8 +81,8 @@ public class ConstantBooleanReturnValuesFlippedMethodMapper extends SingleEntryB
                 return MatchingResult.FAIL;
         }
 
-        final InsnList sourceCopy = copy(source.instructions);
-        final InsnList candidateCopy = copy(candidate.instructions);
+        final InsnList sourceCopy = copy(source.node().instructions);
+        final InsnList candidateCopy = copy(candidate.node().instructions);
 
         final AbstractInsnNode[] sourceArray = sourceCopy.toArray();
         final AbstractInsnNode[] candidateArray = candidateCopy.toArray();

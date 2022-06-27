@@ -1,13 +1,13 @@
 package com.ldtteam.jam.mcpconfig;
 
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.identification.IExistingIdentitySupplier;
 import com.machinezoo.noexception.Exceptions;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.INamedMappingFile;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,37 +36,38 @@ public class TSRGIdentitySupplier implements IExistingIdentitySupplier
     }
 
     @Override
-    public int getClassIdentity(final ClassNode classNode)
+    public int getClassIdentity(final ClassData classData)
     {
-        return Integer.parseInt(this.officialToIdMapping.remapClass(classNode.name));
+        return Integer.parseInt(this.officialToIdMapping.remapClass(classData.node().name));
     }
 
     @Override
-    public int getMethodIdentity(final ClassNode classNode, final MethodNode methodNode)
+    public int getMethodIdentity(final MethodData methodData)
     {
-        return Integer.parseInt(this.officialToIdMapping.getClass(classNode.name)
-                 .remapMethod(methodNode.name, methodNode.desc));
+        return Integer.parseInt(this.officialToIdMapping.getClass(methodData.owner().node().name)
+                 .remapMethod(methodData.node().name, methodData.node().desc));
     }
 
     @Override
-    public int getFieldIdentity(final ClassNode classNode, final FieldNode fieldNode)
+    public int getFieldIdentity(final FieldData fieldData)
     {
-        return Integer.parseInt(this.officialToIdMapping.getClass(classNode.name)
-          .remapField(fieldNode.name));
+        return Integer.parseInt(this.officialToIdMapping.getClass(fieldData.owner().node().name)
+          .remapField(fieldData.node().name));
     }
 
     @Override
-    public int getParameterIdentity(final ClassNode classNode, final MethodNode methodNode, final ParameterNode parameterNode, final int index)
+    public int getParameterIdentity(final ParameterData parameterData)
     {
-        final String remappedClass = this.officialToObfuscatedMapping.remapClass(classNode.name);
-        final String remappedMethod = this.officialToObfuscatedMapping.getClass(classNode.name).remapMethod(methodNode.name, methodNode.desc);
-        final String remappedMethodDescriptor = this.officialToObfuscatedMapping.remapDescriptor(methodNode.desc);
+        final String remappedClass = this.officialToObfuscatedMapping.remapClass(parameterData.classOwner().node().name);
+        final String remappedMethod = this.officialToObfuscatedMapping.getClass(parameterData.classOwner().node().name)
+                .remapMethod(parameterData.owner().node().name, parameterData.owner().node().desc);
+        final String remappedMethodDescriptor = this.officialToObfuscatedMapping.remapDescriptor(parameterData.owner().node().desc);
 
         final String id = Objects.requireNonNull(this.obfuscatedToIdMapping.getClass(remappedClass)
             .getMethod(remappedMethod, remappedMethodDescriptor))
-          .remapParameter(index, parameterNode.name);
+          .remapParameter(parameterData.index(), parameterData.node().name);
 
-        if (Objects.equals(id, parameterNode.name))
+        if (Objects.equals(id, parameterData.node().name))
             return -1;
 
         return Integer.parseInt(id);

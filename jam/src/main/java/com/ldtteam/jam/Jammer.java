@@ -1,24 +1,21 @@
 package com.ldtteam.jam;
 
 import com.google.common.collect.*;
+import com.ldtteam.jam.loader.ASMDataLoader;
+import com.ldtteam.jam.loader.LoadedASMData;
 import com.ldtteam.jam.spi.IJammer;
+import com.ldtteam.jam.spi.asm.*;
 import com.ldtteam.jam.spi.ast.named.INamedAST;
 import com.ldtteam.jam.spi.configuration.Configuration;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;
 import com.ldtteam.jam.spi.configuration.MappingRuntimeConfiguration;
 import com.ldtteam.jam.spi.configuration.OutputConfiguration;
 import com.ldtteam.jam.spi.mapping.MappingResult;
-import com.ldtteam.jam.loader.ASMDataLoader;
-import com.ldtteam.jam.loader.LoadedASMData;
+import com.ldtteam.jam.spi.name.IExistingNameSupplier;
 import com.ldtteam.jam.statistics.MappingStatistics;
+import com.ldtteam.jam.util.MethodDataUtils;
 import com.ldtteam.jam.util.SetsUtil;
 import com.machinezoo.noexception.Exceptions;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,13 +24,11 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class Jammer implements IJammer
-{
+public class Jammer implements IJammer {
     private final Logger LOGGER = LoggerFactory.getLogger(Jammer.class);
 
     @Override
-    public void run(final Configuration configuration)
-    {
+    public void run(final Configuration configuration) {
         LOGGER.info("Starting Jammer. Version: " + getClass().getPackage().getImplementationVersion());
         LOGGER.info("Validating configuration");
         validateConfiguration(configuration);
@@ -41,53 +36,101 @@ public class Jammer implements IJammer
         LOGGER.info("Preparing...");
         prepare(configuration);
 
+
         LOGGER.info("Loading data...");
         final Map<String, InputConfiguration> configurationsByName = configuration.inputs().stream()
-          .collect(Collectors.toMap(InputConfiguration::name, Function.identity()));
+                .collect(Collectors.toMap(InputConfiguration::name, Function.identity()));
+
+        record RemapperCandidateByInputName(String name, Optional<IExistingNameSupplier> remapper) {
+        }
+        final BiMap<String, Optional<IExistingNameSupplier>> existingNameSupplierCandidateByName = configurationsByName
+                .entrySet()
+                .stream()
+                .map(entry -> new RemapperCandidateByInputName(entry.getKey(), entry.getValue().names()))
+                .collect(
+                        Collectors.collectingAndThen(
+                                Collectors.toMap(RemapperCandidateByInputName::name, RemapperCandidateByInputName::remapper),
+                                HashBiMap::create
+                        )
+                );
+
 
         final Set<LoadedASMData> data = configuration.inputs().stream()
-          .map(ASMDataLoader::load)
-          .collect(Collectors.toSet());
+                .map(ASMDataLoader::load)
+                .collect(Collectors.toSet());
 
-        record LoadedASMDataByInputName(String name, LoadedASMData data) {}
-        final Map<String, LoadedASMData> dataByInputName = data.stream()
-          .map(d -> new LoadedASMDataByInputName(d.name(), d))
-          .collect(Collectors.toMap(LoadedASMDataByInputName::name, LoadedASMDataByInputName::data));
+        record LoadedASMDataByInputName(String name, LoadedASMData data) {
+        }
+        final BiMap<String, IASMData> dataByInputName = data.stream()
+                .map(d -> new LoadedASMDataByInputName(d.name(), d))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toMap(LoadedASMDataByInputName::name, LoadedASMDataByInputName::data),
+                        HashBiMap::create));
+        record ConfigurationNameByClassDataEntry(ClassData classData, String name) {
+        }
+        final Map<ClassData, String> configurationNameByClassDatas = data.stream()
+                .flatMap(inputData -> inputData.classes()
+                        .stream()
+                        .map(classData -> new ConfigurationNameByClassDataEntry(classData,
+                                inputData.name())))
+                .collect(Collectors.toMap(ConfigurationNameByClassDataEntry::classData,
+                        ConfigurationNameByClassDataEntry::name));
 
-        record ConfigurationNameByClassNodeEntry(ClassNode classNode, String name) {}
-        final Map<ClassNode, String> configurationNameByClassNodes = data.stream()
-          .flatMap(inputData -> inputData.classes()
-            .stream()
-            .map(classNode -> new ConfigurationNameByClassNodeEntry(classNode, inputData.name())))
-          .collect(Collectors.toMap(ConfigurationNameByClassNodeEntry::classNode, ConfigurationNameByClassNodeEntry::name));
+        record ConfigurationNameByMethodDataEntry(MethodData methodData, String name) {
+        }
+        final Map<MethodData, String> configurationNameByMethodDatas = data.stream()
+                .flatMap(inputData -> inputData.methods()
+                        .stream()
+                        .map(methodData -> new ConfigurationNameByMethodDataEntry(methodData,
+                                inputData.name())))
+                .collect(Collectors.toMap(ConfigurationNameByMethodDataEntry::methodData,
+                        ConfigurationNameByMethodDataEntry::name));
 
-        record ConfigurationNameByMethodNodeEntry(MethodNode methodNode, String name) {}
-        final Map<MethodNode, String> configurationNameByMethodNodes = data.stream()
-          .flatMap(inputData -> inputData.methods()
-            .stream()
-            .map(methodNode -> new ConfigurationNameByMethodNodeEntry(methodNode, inputData.name())))
-          .collect(Collectors.toMap(ConfigurationNameByMethodNodeEntry::methodNode, ConfigurationNameByMethodNodeEntry::name));
+        record ConfigurationNameByFieldDataEntry(FieldData fieldData, String name) {
+        }
+        final Map<FieldData, String> configurationNameByFieldDatas = data.stream()
+                .flatMap(inputData -> inputData.fields()
+                        .stream()
+                        .map(fieldData -> new ConfigurationNameByFieldDataEntry(fieldData,
+                                inputData.name())))
+                .collect(Collectors.toMap(ConfigurationNameByFieldDataEntry::fieldData,
+                        ConfigurationNameByFieldDataEntry::name));
 
-        record ConfigurationNameByFieldNodeEntry(FieldNode fieldNode, String name) {}
-        final Map<FieldNode, String> configurationNameByFieldNodes = data.stream()
-          .flatMap(inputData -> inputData.fields()
-            .stream()
-            .map(fieldNode -> new ConfigurationNameByFieldNodeEntry(fieldNode, inputData.name())))
-          .collect(Collectors.toMap(ConfigurationNameByFieldNodeEntry::fieldNode, ConfigurationNameByFieldNodeEntry::name));
+        record ConfigurationNameByParameterDataEntry(ParameterData parameterData, String name) {
+        }
+        final Map<ParameterData, String> configurationNameByParameterDatas = data.stream()
+                .flatMap(inputData -> inputData.parameters()
+                        .stream()
+                        .map(parameterData -> new ConfigurationNameByParameterDataEntry(parameterData,
+                                inputData.name())))
+                .collect(Collectors.toMap(ConfigurationNameByParameterDataEntry::parameterData,
+                        ConfigurationNameByParameterDataEntry::name));
 
-        record ClassNodesByMethodNodeEntry(MethodNode methodNode, ClassNode classNode) {}
-        final Map<MethodNode, ClassNode> classNodesByMethodNodes = data.stream()
-          .flatMap(inputData -> inputData.classes().stream())
-          .flatMap(classNode -> classNode.methods.stream()
-            .map(methodNode -> new ClassNodesByMethodNodeEntry(methodNode, classNode)))
-          .collect(Collectors.toMap(ClassNodesByMethodNodeEntry::methodNode, ClassNodesByMethodNodeEntry::classNode));
+        record ClassDatasByMethodDataEntry(MethodData methodData, ClassData classData) {
+        }
+        final Map<MethodData, ClassData> classDatasByMethodDatas = data.stream()
+                .flatMap(inputData -> inputData.classes().stream())
+                .flatMap(classData -> classData.node().methods.stream()
+                        .map(node -> new MethodData(classData, node))
+                        .map(methodData -> new ClassDatasByMethodDataEntry(methodData, classData)))
+                .collect(Collectors.toMap(ClassDatasByMethodDataEntry::methodData, ClassDatasByMethodDataEntry::classData));
 
-        record ClassNodesByFieldNodeEntry(FieldNode fieldNode, ClassNode classNode) {}
-        final Map<FieldNode, ClassNode> classNodesByFieldNodes = data.stream()
-          .flatMap(inputData -> inputData.classes().stream())
-          .flatMap(classNode -> classNode.fields.stream()
-            .map(fieldNode -> new ClassNodesByFieldNodeEntry(fieldNode, classNode)))
-          .collect(Collectors.toMap(ClassNodesByFieldNodeEntry::fieldNode, ClassNodesByFieldNodeEntry::classNode));
+        record ClassDatasByFieldDataEntry(FieldData fieldData, ClassData classData) {
+        }
+        final Map<FieldData, ClassData> classDatasByFieldDatas = data.stream()
+                .flatMap(inputData -> inputData.classes().stream())
+                .flatMap(classData -> classData.node().fields.stream()
+                        .map(node -> new FieldData(classData, node))
+                        .map(fieldData -> new ClassDatasByFieldDataEntry(fieldData, classData)))
+                .collect(Collectors.toMap(ClassDatasByFieldDataEntry::fieldData, ClassDatasByFieldDataEntry::classData));
+
+        record MethodDatasByParameterDataEntry(ParameterData parameterData, MethodData methodData) {
+        }
+        final Map<ParameterData, MethodData> methodDatasByParameterDatas = data.stream()
+                .flatMap(inputData -> inputData.methods().stream())
+                .flatMap(methodData -> MethodDataUtils.parametersAsList(methodData).stream()
+                        .map(parameterData -> new MethodDatasByParameterDataEntry(parameterData, methodData)))
+                .collect(Collectors.toMap(MethodDatasByParameterDataEntry::parameterData, MethodDatasByParameterDataEntry::methodData));
 
         LOGGER.info("Mapping direct inputs...");
         final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitionMappings = buildTransitionMap(configuration, dataByInputName);
@@ -97,45 +140,60 @@ public class Jammer implements IJammer
         MappingStatistics mappingStatistics = collectMappingStatistics(lastMappingResult);
 
         LOGGER.info("Reconstructing transitively lost class mappings...");
-        final Set<ClassNode> unmappedClasses = Sets.newHashSet(lastMappingResult.classes().unmappedSources());
-        final Set<MethodNode> unmappedMethods = Sets.newHashSet(lastMappingResult.methods().unmappedSources());
-        final Set<FieldNode> unmappedFields = Sets.newHashSet(lastMappingResult.fields().unmappedSources());
+        final Set<ClassData> unmappedClasses = Sets.newHashSet(lastMappingResult.classes().unmappedSources());
+        final Set<MethodData> unmappedMethods = Sets.newHashSet(lastMappingResult.methods().unmappedSources());
+        final Set<FieldData> unmappedFields = Sets.newHashSet(lastMappingResult.fields().unmappedSources());
+        final Set<ParameterData> unmappedParameters = Sets.newHashSet(lastMappingResult.parameters().unmappedSources());
 
-        final BiMap<ClassNode, ClassNode> mappedClasses = HashBiMap.create(lastMappingResult.classes().mappings());
-        final BiMap<MethodNode, MethodNode> mappedMethods = HashBiMap.create(lastMappingResult.methods().mappings());
-        final BiMap<FieldNode, FieldNode> mappedFields = HashBiMap.create(lastMappingResult.fields().mappings());
+        final BiMap<ClassData, ClassData> mappedClasses = HashBiMap.create(lastMappingResult.classes().mappings());
+        final BiMap<MethodData, MethodData> mappedMethods = HashBiMap.create(lastMappingResult.methods().mappings());
+        final BiMap<FieldData, FieldData> mappedFields = HashBiMap.create(lastMappingResult.fields().mappings());
+        final BiMap<ParameterData, ParameterData> mappedParameters = HashBiMap.create(lastMappingResult.parameters().mappings());
 
-        final BiMap<ClassNode, ClassNode> additionallyMappedClasses = transitivelyMapRemainingClasses(
-          lastMappingResult,
-          transitionMappings,
-          configuration.runtimeConfiguration()
+        final BiMap<ClassData, ClassData> additionallyMappedClasses = transitivelyMapRemainingClasses(
+                lastMappingResult,
+                transitionMappings,
+                configuration.runtimeConfiguration()
         );
 
         mappedClasses.putAll(additionallyMappedClasses);
         unmappedClasses.removeAll(additionallyMappedClasses.keySet());
 
-        LOGGER.info("Reconstructing transitively lost method mappings...");
-        final Set<MethodNode> rejuvenatedMethods = Sets.newHashSet();
+        LOGGER.info("Reconstructing transitively lost method and parameters mappings...");
+        final Set<MethodData> rejuvenatedMethods = Sets.newHashSet();
+        final Set<ParameterData> rejuvenatedParameters = Sets.newHashSet();
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no methods inside this will be mapped.
-            final Set<MethodNode> unmappedNextGenMethods = nextGenClass.methods.stream().collect(SetsUtil.methods((node) -> nextGenClass));
-            final Set<MethodNode> unmappedCurrentGenMethods = transitiveCurrentGenClass.methods.stream().collect(SetsUtil.methods((node) -> transitiveCurrentGenClass));
+            final Set<MethodData> unmappedNextGenMethods = nextGenClass.node().methods.stream().map(node -> new MethodData(nextGenClass, node)).collect(SetsUtil.methods());
+            final Set<MethodData> unmappedCurrentGenMethods = transitiveCurrentGenClass.node().methods.stream().map(node -> new MethodData(transitiveCurrentGenClass, node)).collect(SetsUtil.methods());
 
-            final MappingResult<MethodNode> transitiveMethodMapping = configuration.runtimeConfiguration().methodMapper().map(unmappedNextGenMethods, unmappedCurrentGenMethods);
+            final MappingResult<MethodData> transitiveMethodMapping = configuration.runtimeConfiguration().methodMapper().map(unmappedNextGenMethods, unmappedCurrentGenMethods);
 
             unmappedMethods.removeAll(transitiveMethodMapping.mappings().keySet());
             mappedMethods.putAll(transitiveMethodMapping.mappings());
             rejuvenatedMethods.addAll(transitiveMethodMapping.mappings().keySet());
+
+            transitiveMethodMapping.mappings()
+                    .forEach((nextGenMethod, transitiveCurrentGenMethod) -> {
+                        final Set<ParameterData> unmappedNextGenParameters = MethodDataUtils.parametersAsSet(nextGenMethod);
+                        final Set<ParameterData> unmappedCurrentGenParameters = MethodDataUtils.parametersAsSet(transitiveCurrentGenMethod);
+
+                        final MappingResult<ParameterData> transitiveParameterMapping = configuration.runtimeConfiguration().parameterMapper().map(unmappedNextGenParameters, unmappedCurrentGenParameters);
+
+                        unmappedParameters.removeAll(transitiveParameterMapping.mappings().keySet());
+                        mappedParameters.putAll(transitiveParameterMapping.mappings());
+                        rejuvenatedParameters.addAll(transitiveParameterMapping.mappings().keySet());
+                    });
         });
 
         LOGGER.info("Reconstructing transitively lost field mappings...");
-        final Set<FieldNode> rejuvenatedFields = Sets.newHashSet();
+        final Set<FieldData> rejuvenatedFields = Sets.newHashSet();
         additionallyMappedClasses.forEach((nextGenClass, transitiveCurrentGenClass) -> {
             //We are talking about the A_A case here, so no fields inside this will be mapped.
-            final Set<FieldNode> unmappedNextGenFields = nextGenClass.fields.stream().collect(SetsUtil.fields((node) -> nextGenClass));
-            final Set<FieldNode> unmappedCurrentGenFields = transitiveCurrentGenClass.fields.stream().collect(SetsUtil.fields((node) -> transitiveCurrentGenClass));
+            final Set<FieldData> unmappedNextGenFields = nextGenClass.node().fields.stream().map(node -> new FieldData(nextGenClass, node)).collect(SetsUtil.fields());
+            final Set<FieldData> unmappedCurrentGenFields = transitiveCurrentGenClass.node().fields.stream().map(node -> new FieldData(transitiveCurrentGenClass, node)).collect(SetsUtil.fields());
 
-            final MappingResult<FieldNode> transitiveFieldMapping = configuration.runtimeConfiguration().fieldMapper().map(unmappedNextGenFields, unmappedCurrentGenFields);
+            final MappingResult<FieldData> transitiveFieldMapping = configuration.runtimeConfiguration().fieldMapper().map(unmappedNextGenFields, unmappedCurrentGenFields);
 
             unmappedFields.removeAll(transitiveFieldMapping.mappings().keySet());
             mappedFields.putAll(transitiveFieldMapping.mappings());
@@ -143,139 +201,164 @@ public class Jammer implements IJammer
         });
 
         LOGGER.info("Collecting rejuvenation statistics...");
-        collectRejuvenationStatistics(mappingStatistics, additionallyMappedClasses, rejuvenatedMethods, rejuvenatedFields);
+        collectRejuvenationStatistics(mappingStatistics, additionallyMappedClasses, rejuvenatedMethods, rejuvenatedFields, rejuvenatedParameters);
 
         LOGGER.info("Building transitive class mappings...");
-        Map<ClassNode, List<HistoricalClassMapping>> transitiveClassMappings = buildTransitiveClassMappings(mappedClasses, transitionMappings.values());
+        Map<ClassData, List<HistoricalClassMapping>> transitiveClassMappings = buildTransitiveClassMappings(mappedClasses, transitionMappings.values());
 
         LOGGER.info("Building transitive method mappings...");
-        final BiMap<MethodNode, MethodNode> transitiveMethodMappings = mapMethodsTransitively(unmappedMethods, classNodesByMethodNodes, transitiveClassMappings, configuration.runtimeConfiguration());
-        unmappedMethods.removeAll(transitiveMethodMappings.keySet());
-        mappedMethods.putAll(transitiveMethodMappings);
-        
+        Map<MethodData, List<HistoricalMethodMapping>> transitiveMethodMappings = buildTransitiveMethodMappings(mappedMethods, transitionMappings.values());
+
+        LOGGER.info("Building transitive method mappings...");
+        final BiMap<MethodData, MethodData> transitivelyMappedMethodMappings =
+                mapMethodsTransitively(unmappedMethods, classDatasByMethodDatas, transitiveClassMappings, configuration.runtimeConfiguration());
+        unmappedMethods.removeAll(transitivelyMappedMethodMappings.keySet());
+        mappedMethods.putAll(transitivelyMappedMethodMappings);
+
+        LOGGER.info("Building transitive parameter mappings...");
+        final BiMap<ParameterData, ParameterData> transitivelyMappedParameterMappings =
+                mapParametersTransitively(unmappedParameters, methodDatasByParameterDatas, transitiveMethodMappings, configuration.runtimeConfiguration());
+        unmappedParameters.removeAll(transitivelyMappedParameterMappings.keySet());
+        mappedParameters.putAll(transitivelyMappedParameterMappings);
+
         LOGGER.info("Building transitive field mappings...");
-        final BiMap<FieldNode, FieldNode> transitiveFieldMappings = mapFieldsTransitively(unmappedFields, classNodesByFieldNodes, transitiveClassMappings, configuration.runtimeConfiguration());
-        unmappedFields.removeAll(transitiveFieldMappings.keySet());
-        mappedFields.putAll(transitiveFieldMappings);
+        final BiMap<FieldData, FieldData> transitivelyMappedFieldMappings =
+                mapFieldsTransitively(unmappedFields, classDatasByFieldDatas, transitiveClassMappings, configuration.runtimeConfiguration());
+        unmappedFields.removeAll(transitivelyMappedFieldMappings.keySet());
+        mappedFields.putAll(transitivelyMappedFieldMappings);
 
         LOGGER.info("Collecting renaming statistics...");
-        collectRenamingStatistics(mappingStatistics, transitiveMethodMappings, transitiveFieldMappings);
+        collectRenamingStatistics(mappingStatistics, transitivelyMappedMethodMappings, transitivelyMappedFieldMappings, transitivelyMappedParameterMappings);
 
         LOGGER.info("Determining class ids...");
-        final BiMap<ClassNode, Integer> classIds = determineClassIds(mappedClasses, unmappedClasses, configurationNameByClassNodes, configurationsByName, configuration.outputConfiguration());
+        final BiMap<ClassData, Integer> classIds =
+                determineClassIds(mappedClasses, unmappedClasses, configurationNameByClassDatas, configurationsByName, configuration.outputConfiguration());
 
         LOGGER.info("Determining field ids...");
-        final BiMap<FieldNode, Integer> fieldIds = determineFieldIds(mappedFields, unmappedFields, classNodesByFieldNodes, configurationNameByFieldNodes, configurationsByName, configuration.outputConfiguration());
+        final BiMap<FieldData, Integer> fieldIds =
+                determineFieldIds(mappedFields, unmappedFields, configurationNameByFieldDatas, configurationsByName, configuration.outputConfiguration());
 
-        LOGGER.info("Determining method and parameter ids...");
-        final MethodIdMappingResult methodIdMappingResult = determineMethodIds(mappedMethods, unmappedMethods, classNodesByMethodNodes, configurationNameByMethodNodes, configurationsByName, configuration.outputConfiguration());
+        LOGGER.info("Determining method ids...");
+        final BiMap<MethodData, Integer> methodIds =
+                determineMethodIds(mappedMethods, unmappedMethods, configurationNameByMethodDatas, configurationsByName, configuration.outputConfiguration());
+
+        LOGGER.info("Determining parameter ids...");
+        final BiMap<ParameterData, Integer> parameterIds =
+                determineParameterIds(mappedParameters, unmappedParameters, configurationNameByParameterDatas, configurationsByName, configuration.outputConfiguration());
 
         LOGGER.info("Writing mappings...");
-        final LoadedASMData targetASMData = dataByInputName.get(Objects.requireNonNull(configuration.inputs().get(configuration.inputs().size() - 1)).name());
-        writeOutput(classIds, methodIdMappingResult.methodIds(), fieldIds, methodIdMappingResult.parameterIds(), configuration.outputConfiguration(), targetASMData);
+        final IASMData targetASMData = dataByInputName.get(Objects.requireNonNull(configuration.inputs().get(configuration.inputs().size() - 1)).name());
+        writeOutput(
+                dataByInputName.inverse(),
+                existingNameSupplierCandidateByName,
+                mappedClasses,
+                mappedFields,
+                mappedMethods,
+                mappedParameters,
+                classIds,
+                methodIds,
+                fieldIds,
+                parameterIds,
+                configuration.outputConfiguration(),
+                targetASMData
+        );
 
         LOGGER.info("Collecting total statistics...");
-        collectTotalStatistics(mappingStatistics, mappedClasses, mappedMethods, mappedFields, unmappedClasses, unmappedMethods, unmappedFields);
+        collectTotalStatistics(mappingStatistics, mappedClasses, mappedMethods, mappedFields, mappedParameters, unmappedClasses, unmappedMethods, unmappedFields, unmappedParameters);
 
         LOGGER.info("Writing statistics...");
         writeStatistics(mappingStatistics, configuration);
     }
 
-    private void writeStatistics(final MappingStatistics mappingStatistics, final Configuration configuration)
-    {
+    private void writeStatistics(final MappingStatistics mappingStatistics, final Configuration configuration) {
         configuration.outputConfiguration().statisticsWriter().write(
-          configuration.outputConfiguration().outputDirectory(),
-          mappingStatistics,
-          configuration
+                configuration.outputConfiguration().outputDirectory(),
+                mappingStatistics,
+                configuration
         );
     }
 
     private void collectTotalStatistics(
-      final MappingStatistics mappingStatistics,
-      final BiMap<ClassNode, ClassNode> mappedClasses,
-      final BiMap<MethodNode, MethodNode> mappedMethods,
-      final BiMap<FieldNode, FieldNode> mappedFields,
-      final Set<ClassNode> unmappedClasses,
-      final Set<MethodNode> unmappedMethods,
-      final Set<FieldNode> unmappedFields)
-    {
+            final MappingStatistics mappingStatistics,
+            final BiMap<ClassData, ClassData> mappedClasses,
+            final BiMap<MethodData, MethodData> mappedMethods,
+            final BiMap<FieldData, FieldData> mappedFields,
+            final BiMap<ParameterData, ParameterData> mappedParameters,
+            final Set<ClassData> unmappedClasses,
+            final Set<MethodData> unmappedMethods,
+            final Set<FieldData> unmappedFields,
+            final Set<ParameterData> unmappedParameters) {
         mappingStatistics.getTotalClassStatistics().load(0, mappedClasses.size(), unmappedClasses.size());
         mappingStatistics.getTotalMethodStatistics().load(0, mappedMethods.size(), unmappedMethods.size());
         mappingStatistics.getTotalFieldStatistics().load(0, mappedFields.size(), unmappedFields.size());
+        mappingStatistics.getTotalParameterStatistics().load(0, mappedParameters.size(), unmappedParameters.size());
     }
 
     private void collectRenamingStatistics(
-      final MappingStatistics statistics,
-      final BiMap<MethodNode, MethodNode> transitiveMethodMappings,
-      final BiMap<FieldNode, FieldNode> transitiveFieldMappings)
-    {
-        statistics.getRenamedClassStatistics().load(0,0,0); //Renaming never happens, jammer for now does not support this scenario.
+            final MappingStatistics statistics,
+            final BiMap<MethodData, MethodData> transitiveMethodMappings,
+            final BiMap<FieldData, FieldData> transitiveFieldMappings,
+            final BiMap<ParameterData, ParameterData> transitiveParameterMappings) {
+        statistics.getRenamedClassStatistics().load(0, 0, 0); //Renaming never happens, jammer for now does not support this scenario.
         statistics.getRenamedMethodStatistics().load(0, transitiveMethodMappings.size(), 0);
         statistics.getRenamedFieldStatistics().load(0, transitiveFieldMappings.size(), 0);
+        statistics.getRenamedParameterStatistics().load(0, transitiveParameterMappings.size(), 0);
     }
 
     private void collectRejuvenationStatistics(
-      final MappingStatistics statistics,
-      final BiMap<ClassNode, ClassNode> additionallyMappedClasses,
-      final Set<MethodNode> rejuvenatedMethods,
-      final Set<FieldNode> rejuvenatedFields)
-    {
+            final MappingStatistics statistics,
+            final BiMap<ClassData, ClassData> additionallyMappedClasses,
+            final Set<MethodData> rejuvenatedMethods,
+            final Set<FieldData> rejuvenatedFields,
+            final Set<ParameterData> rejuvenatedParameters) {
         statistics.getRejuvenatedClassStatistics().load(0, additionallyMappedClasses.size(), 0); //This phase can not find or lose any entries.
         statistics.getRejuvenatedMethodStatistics().load(0, rejuvenatedMethods.size(), 0);
         statistics.getRejuvenatedFieldStatistics().load(0, rejuvenatedFields.size(), 0);
+        statistics.getRejuvenatedParameterStatistics().load(0, rejuvenatedParameters.size(), 0);
     }
 
-    private MappingStatistics collectMappingStatistics(final JarMappingResult lastMappingResult)
-    {
+    private MappingStatistics collectMappingStatistics(final JarMappingResult lastMappingResult) {
         final MappingStatistics statistics = new MappingStatistics();
 
         statistics.getDirectClassStatistics().loadFromMappingResult(lastMappingResult.classes());
         statistics.getDirectMethodStatistics().loadFromMappingResult(lastMappingResult.methods());
         statistics.getDirectFieldStatistics().loadFromMappingResult(lastMappingResult.fields());
+        statistics.getDirectParameterStatistics().loadFromMappingResult(lastMappingResult.parameters());
 
         return statistics;
     }
 
-    private void validateConfiguration(final Configuration configuration)
-    {
+    private void validateConfiguration(final Configuration configuration) {
         validateInputConfigurations(configuration.inputs());
     }
 
-    private void prepare(final Configuration configuration)
-    {
+    private void prepare(final Configuration configuration) {
         Exceptions.log(LOGGER).run(
-          Exceptions.sneak().runnable(
-            () -> Files.createDirectories(configuration.outputConfiguration().outputDirectory())
-          )
+                Exceptions.sneak().runnable(
+                        () -> Files.createDirectories(configuration.outputConfiguration().outputDirectory())
+                )
         );
     }
 
-    private void validateInputConfigurations(final List<InputConfiguration> inputs)
-    {
-        if (inputs.size() < 2)
-        {
+    private void validateInputConfigurations(final List<InputConfiguration> inputs) {
+        if (inputs.size() < 2) {
             throw new IllegalStateException("At least two inputs are required.");
         }
 
         boolean doCheckIdentifier = false;
         boolean allHaveIdentifier;
 
-        for (int i = 0; i < inputs.size(); i++)
-        {
+        for (int i = 0; i < inputs.size(); i++) {
             final InputConfiguration input = inputs.get(i);
-            if (!Files.exists(input.path()))
-            {
+            if (!Files.exists(input.path())) {
                 throw new IllegalStateException("The given configuration: " + input.name() + " targets an input path which does not exist: " + input.path());
             }
 
-            if (i != inputs.size() - 1)
-            {
+            if (i != inputs.size() - 1) {
                 doCheckIdentifier |= input.identifier().isPresent();
-                if (doCheckIdentifier)
-                {
+                if (doCheckIdentifier) {
                     allHaveIdentifier = input.identifier().isPresent();
-                    if (!allHaveIdentifier || i != 0)
-                    {
+                    if (!allHaveIdentifier || i != 0) {
                         throw new IllegalStateException("Not all inputs have an identity supplier. Only for the last input the supplier can be omitted.");
                     }
                 }
@@ -283,26 +366,23 @@ public class Jammer implements IJammer
         }
     }
 
-
-    private LinkedHashMap<TransitionMappingResultKey, JarMappingResult> buildTransitionMap(final Configuration configuration, final Map<String, LoadedASMData> dataByInputName)
-    {
+    private LinkedHashMap<TransitionMappingResultKey, JarMappingResult> buildTransitionMap(final Configuration configuration, final Map<String, IASMData> dataByInputName) {
         final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitionMappingResults = Maps.newLinkedHashMap();
 
         final LinkedList<InputConfiguration> inputs = new LinkedList<>(configuration.inputs());
 
         while (
-          inputs.size() > 1
-        )
-        {
+                inputs.size() > 1
+        ) {
             InputConfiguration target = inputs.removeLast();
             InputConfiguration current = inputs.peekLast();
 
             LOGGER.info("Mapping {} to {}", Objects.requireNonNull(current).name(), target.name());
 
             JarMappingResult initialMappingResult = mapDirectly(
-              dataByInputName.get(current.name()).classes(),
-              dataByInputName.get(target.name()).classes(),
-              configuration.runtimeConfiguration()
+                    dataByInputName.get(current.name()).classes(),
+                    dataByInputName.get(target.name()).classes(),
+                    configuration.runtimeConfiguration()
             );
 
             transitionMappingResults.put(new TransitionMappingResultKey(current.name(), target.name()), initialMappingResult);
@@ -311,22 +391,20 @@ public class Jammer implements IJammer
         return transitionMappingResults;
     }
 
-    private BiMap<ClassNode, ClassNode> transitivelyMapRemainingClasses(
-      final JarMappingResult currentGenToNextGenResult,
-      final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitions,
-      MappingRuntimeConfiguration runtimeConfiguration
-    )
-    {
-        final BiMap<ClassNode, ClassNode> additionallyMappedClasses = HashBiMap.create();
+    private BiMap<ClassData, ClassData> transitivelyMapRemainingClasses(
+            final JarMappingResult currentGenToNextGenResult,
+            final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitions,
+            MappingRuntimeConfiguration runtimeConfiguration
+    ) {
+        final BiMap<ClassData, ClassData> additionallyMappedClasses = HashBiMap.create();
 
-        final Set<ClassNode> nextGenUnmappedClasses = currentGenToNextGenResult.classes().unmappedSources();
+        final Set<ClassData> nextGenUnmappedClasses = currentGenToNextGenResult.classes().unmappedSources();
         final Iterator<JarMappingResult> mappingResultIterator = transitions.values().iterator();
         mappingResultIterator.next(); //Skip the first since we already have that transition and are not interested in it.
 
-        while (mappingResultIterator.hasNext() && !nextGenUnmappedClasses.isEmpty())
-        {
-            final MappingResult<ClassNode> transitiveMapping =
-              runtimeConfiguration.classMapper().map(nextGenUnmappedClasses, mappingResultIterator.next().classes().unmappedCandidates());
+        while (mappingResultIterator.hasNext() && !nextGenUnmappedClasses.isEmpty()) {
+            final MappingResult<ClassData> transitiveMapping =
+                    runtimeConfiguration.classMapper().map(nextGenUnmappedClasses, mappingResultIterator.next().classes().unmappedCandidates());
 
             nextGenUnmappedClasses.clear();
             nextGenUnmappedClasses.addAll(transitiveMapping.unmappedSources());
@@ -337,27 +415,23 @@ public class Jammer implements IJammer
         return additionallyMappedClasses;
     }
 
-    Map<ClassNode, List<HistoricalClassMapping>> buildTransitiveClassMappings(final BiMap<ClassNode, ClassNode> currentClassMappings, final Collection<JarMappingResult> mappings)
-    {
+    Map<ClassData, List<HistoricalClassMapping>> buildTransitiveClassMappings(final BiMap<ClassData, ClassData> currentClassMappings, final Collection<JarMappingResult> mappings) {
         final Iterator<JarMappingResult> iterator = mappings.iterator();
         final JarMappingResult initial = iterator.next(); //Skip the first since we already have that transition and are not interested in it.
 
-        final Map<ClassNode, List<HistoricalClassMapping>> transitiveClassMappings = Maps.newHashMap();
-        final BiMap<ClassNode, ClassNode> currentLastEntry = HashBiMap.create();
+        final Map<ClassData, List<HistoricalClassMapping>> transitiveClassMappings = Maps.newHashMap();
+        final BiMap<ClassData, ClassData> currentLastEntry = HashBiMap.create();
 
         currentClassMappings.forEach((source, target) -> {
-            final Set<MethodNode> availableMethods = target.methods.stream().collect(SetsUtil.methods((node) -> target));
-            final Set<FieldNode> availableFields = target.fields.stream().collect(SetsUtil.fields((node) -> target));
+            final Set<MethodData> availableMethods = target.node().methods.stream().map(node -> new MethodData(target, node)).collect(SetsUtil.methods());
+            final Set<FieldData> availableFields = target.node().fields.stream().map(node -> new FieldData(target, node)).collect(SetsUtil.fields());
 
             if (initial.classes().mappings().containsKey(source)) {
 
                 availableMethods.removeIf(method -> !initial.methods().unmappedCandidates().contains(method));
                 availableFields.removeIf(field -> !initial.fields().unmappedCandidates().contains(field));
-            }
-            else
-            {
-                for (final JarMappingResult mapping : mappings)
-                {
+            } else {
+                for (final JarMappingResult mapping : mappings) {
                     if (mapping.classes().unmappedCandidates().contains(target)) {
                         availableMethods.removeIf(method -> !mapping.methods().unmappedCandidates().contains(method));
                         availableFields.removeIf(field -> !mapping.fields().unmappedCandidates().contains(field));
@@ -370,30 +444,28 @@ public class Jammer implements IJammer
             currentLastEntry.put(source, target);
         });
 
-        final BiMap<ClassNode, ClassNode> invertedCurrentLastEntry = currentLastEntry.inverse();
+        final BiMap<ClassData, ClassData> invertedCurrentLastEntry = currentLastEntry.inverse();
 
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             final JarMappingResult next = iterator.next();
 
-            final Set<ClassNode> lastEntries = currentLastEntry.values().stream().collect(SetsUtil.classes());
-            for (final ClassNode lastEntry : lastEntries)
-            {
-                if (next.classes().mappings().containsKey(lastEntry))
-                {
-                    final ClassNode newLastInChain = next.classes().mappings().get(lastEntry);
-                    final ClassNode nextGenNode = invertedCurrentLastEntry.get(lastEntry);
+            final Set<ClassData> lastEntries = currentLastEntry.values().stream().collect(SetsUtil.classes());
+            for (final ClassData lastEntry : lastEntries) {
+                if (next.classes().mappings().containsKey(lastEntry)) {
+                    final ClassData newLastInChain = next.classes().mappings().get(lastEntry);
+                    final ClassData nextGenData = invertedCurrentLastEntry.get(lastEntry);
 
-                    final Set<MethodNode> availableMethods = newLastInChain.methods.stream().collect(SetsUtil.methods((node) -> newLastInChain));
-                    final Set<FieldNode> availableFields = newLastInChain.fields.stream().collect(SetsUtil.fields((node) -> newLastInChain));
+                    final Set<MethodData> availableMethods = newLastInChain.node().methods.stream().map(node -> new MethodData(newLastInChain, node)).collect(SetsUtil.methods());
+                    final Set<FieldData> availableFields = newLastInChain.node().fields.stream().map(node -> new FieldData(newLastInChain, node)).collect(SetsUtil.fields());
 
                     availableMethods.removeIf(method -> !next.methods().unmappedCandidates().contains(method));
                     availableFields.removeIf(field -> !next.fields().unmappedCandidates().contains(field));
 
-                    transitiveClassMappings.computeIfAbsent(nextGenNode, (key) -> new LinkedList<>()).add(new HistoricalClassMapping(newLastInChain, availableMethods, availableFields));
+                    transitiveClassMappings.computeIfAbsent(nextGenData, (key) -> new LinkedList<>())
+                            .add(new HistoricalClassMapping(newLastInChain, availableMethods, availableFields));
 
-                    currentLastEntry.remove(nextGenNode);
-                    currentLastEntry.put(nextGenNode, newLastInChain);
+                    currentLastEntry.remove(nextGenData);
+                    currentLastEntry.put(nextGenData, newLastInChain);
                 }
             }
         }
@@ -401,143 +473,267 @@ public class Jammer implements IJammer
         return transitiveClassMappings;
     }
 
-    private JarMappingResult mapDirectly(final Set<ClassNode> currentGenClasses, final Set<ClassNode> nextGenClasses, final MappingRuntimeConfiguration runtimeConfiguration)
-    {
-        final MappingResult<ClassNode> classMappingResult = runtimeConfiguration.classMapper().map(nextGenClasses, currentGenClasses);
+    Map<MethodData, List<HistoricalMethodMapping>> buildTransitiveMethodMappings(final BiMap<MethodData, MethodData> currentMethodMappings, final Collection<JarMappingResult> mappings) {
+        final Iterator<JarMappingResult> iterator = mappings.iterator();
+        final JarMappingResult initial = iterator.next(); //Skip the first since we already have that transition and are not interested in it.
 
-        final Set<MethodNode> unmappedCurrentGenMethods = Sets.newHashSet();
-        final Set<MethodNode> unmappedNextGenMethods = Sets.newHashSet();
-        final BiMap<MethodNode, MethodNode> mappedMethods = HashBiMap.create();
+        final Map<MethodData, List<HistoricalMethodMapping>> transitiveMethodMappings = Maps.newHashMap();
+        final BiMap<MethodData, MethodData> currentLastEntry = HashBiMap.create();
+
+        currentMethodMappings.forEach((source, target) -> {
+            final Set<ParameterData> availableParameters = MethodDataUtils.parametersAsSet(target);
+
+            if (initial.methods().mappings().containsKey(source)) {
+                availableParameters.removeIf(method -> !initial.parameters().unmappedCandidates().contains(method));
+            } else {
+                for (final JarMappingResult mapping : mappings) {
+                    if (mapping.methods().unmappedCandidates().contains(target)) {
+                        availableParameters.removeIf(method -> !mapping.parameters().unmappedCandidates().contains(method));
+                        break;
+                    }
+                }
+            }
+
+            transitiveMethodMappings.computeIfAbsent(source, k -> new LinkedList<>()).add(new HistoricalMethodMapping(target, availableParameters));
+            currentLastEntry.put(source, target);
+        });
+
+        final BiMap<MethodData, MethodData> invertedCurrentLastEntry = currentLastEntry.inverse();
+
+        while (iterator.hasNext()) {
+            final JarMappingResult next = iterator.next();
+
+            final Set<MethodData> lastEntries = currentLastEntry.values().stream().collect(SetsUtil.methods());
+            for (final MethodData lastEntry : lastEntries) {
+                if (next.methods().mappings().containsKey(lastEntry)) {
+                    final MethodData newLastInChain = next.methods().mappings().get(lastEntry);
+                    final MethodData nextGenData = invertedCurrentLastEntry.get(lastEntry);
+
+                    final Set<ParameterData> availableParameters = MethodDataUtils.parametersAsSet(newLastInChain);
+
+                    availableParameters.removeIf(method -> !next.parameters().unmappedCandidates().contains(method));
+
+                    transitiveMethodMappings.computeIfAbsent(nextGenData, (key) -> new LinkedList<>())
+                            .add(new HistoricalMethodMapping(newLastInChain, availableParameters));
+
+                    currentLastEntry.remove(nextGenData);
+                    currentLastEntry.put(nextGenData, newLastInChain);
+                }
+            }
+        }
+
+        return transitiveMethodMappings;
+    }
+
+    private JarMappingResult mapDirectly(final Set<ClassData> currentGenClasses, final Set<ClassData> nextGenClasses, final MappingRuntimeConfiguration runtimeConfiguration) {
+        final MappingResult<ClassData> classMappingResult = runtimeConfiguration.classMapper().map(nextGenClasses, currentGenClasses);
+
+        final Set<MethodData> unmappedCurrentGenMethods = Sets.newHashSet();
+        final Set<MethodData> unmappedNextGenMethods = Sets.newHashSet();
+        final BiMap<MethodData, MethodData> mappedMethods = HashBiMap.create();
+
+        final Set<ParameterData> unmappedCurrentGenParameters = Sets.newHashSet();
+        final Set<ParameterData> unmappedNextGenParameters = Sets.newHashSet();
+        final BiMap<ParameterData, ParameterData> mappedParameters = HashBiMap.create();
 
         classMappingResult.unmappedCandidates().stream()
-          .flatMap(classNode -> classNode.methods.stream())
-          .forEach(unmappedCurrentGenMethods::add);
+                .flatMap(classData -> classData.node().methods.stream()
+                        .map(method -> new MethodData(classData, method)))
+                .peek(methodData -> unmappedCurrentGenParameters.addAll(MethodDataUtils.parametersAsSet(methodData)))
+                .forEach(unmappedCurrentGenMethods::add);
 
         classMappingResult.unmappedSources().stream()
-          .flatMap(classNode -> classNode.methods.stream())
-          .forEach(unmappedNextGenMethods::add);
+                .flatMap(classData -> classData.node().methods.stream()
+                        .map(method -> new MethodData(classData, method)))
+                .peek(methodData -> unmappedNextGenParameters.addAll(MethodDataUtils.parametersAsSet(methodData)))
+                .forEach(unmappedNextGenMethods::add);
 
         classMappingResult.mappings()
-          .forEach((nextGenClass, currentGenClass) -> {
-              final Set<MethodNode> nextGenMethods = nextGenClass.methods.stream().collect(SetsUtil.methods((node) -> nextGenClass));
-              final Set<MethodNode> currentGenMethods = currentGenClass.methods.stream().collect(SetsUtil.methods((node) -> currentGenClass));
-              
-              final MappingResult<MethodNode> classMethodMapping =
-                runtimeConfiguration.methodMapper().map(nextGenMethods, currentGenMethods);
+                .forEach((nextGenClass, currentGenClass) -> {
+                    final Set<MethodData> nextGenMethods = nextGenClass.node().methods.stream().map(node -> new MethodData(nextGenClass, node)).collect(SetsUtil.methods());
+                    final Set<MethodData> currentGenMethods = currentGenClass.node().methods.stream().map(node -> new MethodData(currentGenClass, node)).collect(SetsUtil.methods());
 
-              unmappedCurrentGenMethods.addAll(classMethodMapping.unmappedCandidates());
-              unmappedNextGenMethods.addAll(classMethodMapping.unmappedSources());
-              mappedMethods.putAll(classMethodMapping.mappings());
-          });
+                    final MappingResult<MethodData> classMethodMapping =
+                            runtimeConfiguration.methodMapper().map(nextGenMethods, currentGenMethods);
 
-        final MappingResult<MethodNode> methodMappingResult = new MappingResult<>(unmappedNextGenMethods, mappedMethods, unmappedCurrentGenMethods);
+                    unmappedCurrentGenMethods.addAll(classMethodMapping.unmappedCandidates());
+                    unmappedNextGenMethods.addAll(classMethodMapping.unmappedSources());
+                    mappedMethods.putAll(classMethodMapping.mappings());
 
-        final Set<FieldNode> unmappedCurrentGenFields = Sets.newHashSet();
-        final Set<FieldNode> unmappedNextGenFields = Sets.newHashSet();
-        final BiMap<FieldNode, FieldNode> mappedFields = HashBiMap.create();
+                    classMethodMapping.unmappedSources().stream()
+                            .flatMap(MethodDataUtils::parametersAsStream)
+                            .forEach(unmappedNextGenParameters::add);
+
+                    classMethodMapping.mappings()
+                            .forEach((nextGenMethod, currentGenMethod) -> {
+                                final Set<ParameterData> nextGenParameters = MethodDataUtils.parametersAsSet(nextGenMethod);
+                                final Set<ParameterData> currentGenParameters = MethodDataUtils.parametersAsSet(currentGenMethod);
+
+                                final MappingResult<ParameterData> classParameterMapping =
+                                        runtimeConfiguration.parameterMapper().map(nextGenParameters, currentGenParameters);
+
+                                unmappedCurrentGenParameters.addAll(classParameterMapping.unmappedCandidates());
+                                unmappedNextGenParameters.addAll(classParameterMapping.unmappedSources());
+                                mappedParameters.putAll(classParameterMapping.mappings());
+                            });
+                });
+
+        final MappingResult<MethodData> methodMappingResult = new MappingResult<>(unmappedNextGenMethods, mappedMethods, unmappedCurrentGenMethods);
+        final MappingResult<ParameterData> parameterMappingResult = new MappingResult<>(unmappedNextGenParameters, mappedParameters, unmappedCurrentGenParameters);
+
+        final Set<FieldData> unmappedCurrentGenFields = Sets.newHashSet();
+        final Set<FieldData> unmappedNextGenFields = Sets.newHashSet();
+        final BiMap<FieldData, FieldData> mappedFields = HashBiMap.create();
 
         classMappingResult.unmappedCandidates().stream()
-          .flatMap(classNode -> classNode.fields.stream())
-          .forEach(unmappedCurrentGenFields::add);
+                .flatMap(classData -> classData.node().fields.stream()
+                        .map(field -> new FieldData(classData, field)))
+                .forEach(unmappedCurrentGenFields::add);
 
         classMappingResult.unmappedSources().stream()
-          .flatMap(classNode -> classNode.fields.stream())
-          .forEach(unmappedNextGenFields::add);
+                .flatMap(classData -> classData.node().fields.stream()
+                        .map(field -> new FieldData(classData, field)))
+                .forEach(unmappedNextGenFields::add);
 
         classMappingResult.mappings()
-          .forEach((nextGenClass, currentGenClass) -> {
-              final Set<FieldNode> nextGenFields = nextGenClass.fields.stream().collect(SetsUtil.fields((node) -> nextGenClass));
-              final Set<FieldNode> currentGenFields = currentGenClass.fields.stream().collect(SetsUtil.fields((node) -> currentGenClass));
-              
-              final MappingResult<FieldNode> classFieldMapping =
-                runtimeConfiguration.fieldMapper().map(nextGenFields, currentGenFields);
+                .forEach((nextGenClass, currentGenClass) -> {
+                    final Set<FieldData> nextGenFields = nextGenClass.node().fields.stream().map(node -> new FieldData(nextGenClass, node)).collect(SetsUtil.fields());
+                    final Set<FieldData> currentGenFields = currentGenClass.node().fields.stream().map(node -> new FieldData(currentGenClass, node)).collect(SetsUtil.fields());
 
-              unmappedCurrentGenFields.addAll(classFieldMapping.unmappedCandidates());
-              unmappedNextGenFields.addAll(classFieldMapping.unmappedSources());
-              mappedFields.putAll(classFieldMapping.mappings());
-          });
+                    final MappingResult<FieldData> classFieldMapping =
+                            runtimeConfiguration.fieldMapper().map(nextGenFields, currentGenFields);
 
-        final MappingResult<FieldNode> fieldMappingResult = new MappingResult<>(unmappedNextGenFields, mappedFields, unmappedCurrentGenFields);
+                    unmappedCurrentGenFields.addAll(classFieldMapping.unmappedCandidates());
+                    unmappedNextGenFields.addAll(classFieldMapping.unmappedSources());
+                    mappedFields.putAll(classFieldMapping.mappings());
+                });
+
+        final MappingResult<FieldData> fieldMappingResult = new MappingResult<>(unmappedNextGenFields, mappedFields, unmappedCurrentGenFields);
 
         return new JarMappingResult(
-          classMappingResult,
-          methodMappingResult,
-          fieldMappingResult
+                classMappingResult,
+                methodMappingResult,
+                fieldMappingResult,
+                parameterMappingResult
         );
     }
-    
-    private BiMap<MethodNode, MethodNode> mapMethodsTransitively(final Set<MethodNode> unmappedMethods, final Map<MethodNode, ClassNode> methodOwners, final Map<ClassNode, List<HistoricalClassMapping>> history, MappingRuntimeConfiguration runtimeConfiguration)
-    {
-        final BiMap<MethodNode, MethodNode> additionallyMappedMethods = HashBiMap.create();
-        final Multimap<ClassNode, MethodNode> unmappedMethodsByOwner = Multimaps.index(unmappedMethods, methodOwners::get);
-        unmappedMethodsByOwner.keySet().forEach(
-          nextGenClass -> {
-              final List<HistoricalClassMapping> workingHistory = getAdditionalHistoryOfClass(history, nextGenClass);
-              if (workingHistory.isEmpty())
-                  return;
 
-              final Set<MethodNode> unmappedMethodsInClass = unmappedMethodsByOwner.get(nextGenClass).stream().collect(SetsUtil.methods((node) -> nextGenClass));
-              for (final HistoricalClassMapping classMapping : workingHistory)
-              {
-                  final MappingResult<MethodNode> mappingResult = runtimeConfiguration.methodMapper().map(unmappedMethodsInClass, classMapping.unmappedMethods());
-                  additionallyMappedMethods.putAll(mappingResult.mappings());
-                  unmappedMethodsInClass.removeAll(mappingResult.mappings().keySet());
-              }
-          }
+    private BiMap<MethodData, MethodData> mapMethodsTransitively(
+            final Set<MethodData> unmappedMethods,
+            final Map<MethodData, ClassData> methodOwners,
+            final Map<ClassData, List<HistoricalClassMapping>> history,
+            MappingRuntimeConfiguration runtimeConfiguration) {
+        final BiMap<MethodData, MethodData> additionallyMappedMethods = HashBiMap.create();
+        final Multimap<ClassData, MethodData> unmappedMethodsByOwner = Multimaps.index(unmappedMethods, methodOwners::get);
+        unmappedMethodsByOwner.keySet().forEach(
+                nextGenClass -> {
+                    final List<HistoricalClassMapping> workingHistory = getAdditionalHistoryOfClass(history, nextGenClass);
+                    if (workingHistory.isEmpty()) {
+                        return;
+                    }
+
+                    final Set<MethodData> unmappedMethodsInClass = unmappedMethodsByOwner.get(nextGenClass).stream().collect(SetsUtil.methods());
+                    for (final HistoricalClassMapping classMapping : workingHistory) {
+                        final MappingResult<MethodData> mappingResult = runtimeConfiguration.methodMapper().map(unmappedMethodsInClass, classMapping.unmappedMethods());
+                        additionallyMappedMethods.putAll(mappingResult.mappings());
+                        unmappedMethodsInClass.removeAll(mappingResult.mappings().keySet());
+                    }
+                }
         );
 
         return additionallyMappedMethods;
     }
 
-    private BiMap<FieldNode, FieldNode> mapFieldsTransitively(final Set<FieldNode> unmappedFields, final Map<FieldNode, ClassNode> fieldOwners, final Map<ClassNode, List<HistoricalClassMapping>> history, MappingRuntimeConfiguration runtimeConfiguration)
-    {
-        final BiMap<FieldNode, FieldNode> additionallyMappedFields = HashBiMap.create();
-        final Multimap<ClassNode, FieldNode> unmappedFieldsByOwner = Multimaps.index(unmappedFields, fieldOwners::get);
+    private BiMap<FieldData, FieldData> mapFieldsTransitively(
+            final Set<FieldData> unmappedFields,
+            final Map<FieldData, ClassData> fieldOwners,
+            final Map<ClassData, List<HistoricalClassMapping>> history,
+            MappingRuntimeConfiguration runtimeConfiguration) {
+        final BiMap<FieldData, FieldData> additionallyMappedFields = HashBiMap.create();
+        final Multimap<ClassData, FieldData> unmappedFieldsByOwner = Multimaps.index(unmappedFields, fieldOwners::get);
         unmappedFieldsByOwner.keySet().forEach(
-          nextGenClass -> {
-              final List<HistoricalClassMapping> workingHistory = getAdditionalHistoryOfClass(history, nextGenClass);
-              if (workingHistory.isEmpty())
-                  return;
+                nextGenClass -> {
+                    final List<HistoricalClassMapping> workingHistory = getAdditionalHistoryOfClass(history, nextGenClass);
+                    if (workingHistory.isEmpty()) {
+                        return;
+                    }
 
-              final Set<FieldNode> unmappedFieldsInClass = unmappedFieldsByOwner.get(nextGenClass).stream().collect(SetsUtil.fields((node) -> nextGenClass));
-              for (final HistoricalClassMapping classMapping : workingHistory)
-              {
-                  final MappingResult<FieldNode> mappingResult = runtimeConfiguration.fieldMapper().map(unmappedFieldsInClass, classMapping.unmappedFields());
-                  additionallyMappedFields.putAll(mappingResult.mappings());
-                  unmappedFieldsInClass.removeAll(mappingResult.mappings().keySet());
-              }
-          }
+                    final Set<FieldData> unmappedFieldsInClass = unmappedFieldsByOwner.get(nextGenClass).stream().collect(SetsUtil.fields());
+                    for (final HistoricalClassMapping classMapping : workingHistory) {
+                        final MappingResult<FieldData> mappingResult = runtimeConfiguration.fieldMapper().map(unmappedFieldsInClass, classMapping.unmappedFields());
+                        additionallyMappedFields.putAll(mappingResult.mappings());
+                        unmappedFieldsInClass.removeAll(mappingResult.mappings().keySet());
+                    }
+                }
         );
 
         return additionallyMappedFields;
     }
 
-    private List<HistoricalClassMapping> getAdditionalHistoryOfClass(final Map<ClassNode, List<HistoricalClassMapping>> history, final ClassNode classNode) {
-        final List<HistoricalClassMapping> historyForNextGenClass = history.getOrDefault(classNode, new LinkedList<>());
-        if (historyForNextGenClass.isEmpty())
+    private BiMap<ParameterData, ParameterData> mapParametersTransitively(
+            final Set<ParameterData> unmappedParameters,
+            final Map<ParameterData, MethodData> parameterOwners,
+            final Map<MethodData, List<HistoricalMethodMapping>> history,
+            MappingRuntimeConfiguration runtimeConfiguration) {
+        final BiMap<ParameterData, ParameterData> additionallyMappedParameters = HashBiMap.create();
+        final Multimap<MethodData, ParameterData> unmappedParametersByOwner = Multimaps.index(unmappedParameters, parameterOwners::get);
+        unmappedParametersByOwner.keySet().forEach(
+                nextGenMethod -> {
+                    final List<HistoricalMethodMapping> workingHistory = getAdditionalHistoryOfMethod(history, nextGenMethod);
+                    if (workingHistory.isEmpty()) {
+                        return;
+                    }
+
+                    final Set<ParameterData> unmappedParametersInMethod = unmappedParametersByOwner.get(nextGenMethod).stream().collect(SetsUtil.parameters());
+                    for (final HistoricalMethodMapping methodMapping : workingHistory) {
+                        final MappingResult<ParameterData> mappingResult = runtimeConfiguration.parameterMapper().map(unmappedParametersInMethod, methodMapping.unmappedParameters());
+                        additionallyMappedParameters.putAll(mappingResult.mappings());
+                        unmappedParametersInMethod.removeAll(mappingResult.mappings().keySet());
+                    }
+                }
+        );
+
+        return additionallyMappedParameters;
+    }
+
+    private List<HistoricalClassMapping> getAdditionalHistoryOfClass(final Map<ClassData, List<HistoricalClassMapping>> history, final ClassData classData) {
+        final List<HistoricalClassMapping> historyForNextGenClass = history.getOrDefault(classData, new LinkedList<>());
+        if (historyForNextGenClass.isEmpty()) {
             return Collections.emptyList();
+        }
 
         final LinkedList<HistoricalClassMapping> workingHistory = new LinkedList<>(historyForNextGenClass);
         workingHistory.removeFirst(); //THis is the initial mapping, so we don't need to map it.
         return workingHistory;
     }
 
-    private BiMap<ClassNode, Integer> determineClassIds(
-      final BiMap<ClassNode, ClassNode> mappedClasses,
-      final Set<ClassNode> unmappedClasses,
-      final Map<ClassNode, String> configurationNameByClassNodes,
-      final Map<String, InputConfiguration> configurationsByName,
-      final OutputConfiguration outputConfiguration
+    private List<HistoricalMethodMapping> getAdditionalHistoryOfMethod(final Map<MethodData, List<HistoricalMethodMapping>> history, final MethodData methodData) {
+        final List<HistoricalMethodMapping> historyForNextGenMethod = history.getOrDefault(methodData, new LinkedList<>());
+        if (historyForNextGenMethod.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        final LinkedList<HistoricalMethodMapping> workingHistory = new LinkedList<>(historyForNextGenMethod);
+        workingHistory.removeFirst(); //THis is the initial mapping, so we don't need to map it.
+        return workingHistory;
+    }
+
+    private BiMap<ClassData, Integer> determineClassIds(
+            final BiMap<ClassData, ClassData> mappedClasses,
+            final Set<ClassData> unmappedClasses,
+            final Map<ClassData, String> configurationNameByClassDatas,
+            final Map<String, InputConfiguration> configurationsByName,
+            final OutputConfiguration outputConfiguration
     ) {
-        final BiMap<ClassNode, Integer> classIds = HashBiMap.create();
+        final BiMap<ClassData, Integer> classIds = HashBiMap.create();
 
         mappedClasses.forEach((nextGenClass, currentGenClass) -> {
-            final String originalConfigurationName = configurationNameByClassNodes.get(currentGenClass);
+            final String originalConfigurationName = configurationNameByClassDatas.get(currentGenClass);
             final InputConfiguration originalConfiguration = configurationsByName.get(originalConfigurationName);
 
             final int classId = originalConfiguration.identifier()
-              .map(identifier -> identifier.getClassIdentity(currentGenClass))
-              .orElseGet(() -> outputConfiguration.identifier().getClassIdentity(nextGenClass));
+                    .map(identifier -> identifier.getClassIdentity(currentGenClass))
+                    .orElseGet(() -> outputConfiguration.identifier().getClassIdentity(nextGenClass));
 
             classIds.put(nextGenClass, classId);
         });
@@ -547,33 +743,27 @@ public class Jammer implements IJammer
         return classIds;
     }
 
-    private BiMap<FieldNode, Integer> determineFieldIds(
-      final BiMap<FieldNode, FieldNode> mappedFields,
-      final Set<FieldNode> unmappedFields,
-      final Map<FieldNode, ClassNode> classNodesByFieldNodes,
-      final Map<FieldNode, String> configurationNameByFieldNodes,
-      final Map<String, InputConfiguration> configurationsByName,
-      final OutputConfiguration outputConfiguration)
-    {
-        final BiMap<FieldNode, Integer> fieldIds = HashBiMap.create();
+    private BiMap<FieldData, Integer> determineFieldIds(
+            final BiMap<FieldData, FieldData> mappedFields,
+            final Set<FieldData> unmappedFields,
+            final Map<FieldData, String> configurationNameByFieldDatas,
+            final Map<String, InputConfiguration> configurationsByName,
+            final OutputConfiguration outputConfiguration) {
+        final BiMap<FieldData, Integer> fieldIds = HashBiMap.create();
 
         mappedFields.forEach((nextGenField, currentGenField) -> {
-            final String originalConfigurationName = configurationNameByFieldNodes.get(currentGenField);
+            final String originalConfigurationName = configurationNameByFieldDatas.get(currentGenField);
             final InputConfiguration originalConfiguration = configurationsByName.get(originalConfigurationName);
 
-            final ClassNode currentGenOwner = classNodesByFieldNodes.get(currentGenField);
-            final ClassNode nextGenOwner = classNodesByFieldNodes.get(nextGenField);
-
             final int fieldId = originalConfiguration.identifier()
-              .map(identifier -> identifier.getFieldIdentity(currentGenOwner, currentGenField))
-              .orElseGet(() -> outputConfiguration.identifier().getFieldIdentity(nextGenOwner, nextGenField));
+                    .map(identifier -> identifier.getFieldIdentity(currentGenField))
+                    .orElseGet(() -> outputConfiguration.identifier().getFieldIdentity(nextGenField));
 
             fieldIds.put(nextGenField, fieldId);
         });
 
         unmappedFields.forEach(nextGenField -> {
-            final ClassNode nextGenOwner = classNodesByFieldNodes.get(nextGenField);
-            final int fieldId = outputConfiguration.identifier().getFieldIdentity(nextGenOwner, nextGenField);
+            final int fieldId = outputConfiguration.identifier().getFieldIdentity(nextGenField);
 
             fieldIds.put(nextGenField, fieldId);
         });
@@ -581,102 +771,87 @@ public class Jammer implements IJammer
         return fieldIds;
     }
 
-    private MethodIdMappingResult determineMethodIds(
-      final BiMap<MethodNode, MethodNode> mappedMethods,
-      final Set<MethodNode> unmappedMethods,
-      final Map<MethodNode, ClassNode> classNodesByMethodNodes,
-      final Map<MethodNode, String> configurationNameByMethodNodes,
-      final Map<String, InputConfiguration> configurationsByName,
-      final OutputConfiguration outputConfiguration
+    private BiMap<MethodData, Integer> determineMethodIds(
+            final BiMap<MethodData, MethodData> mappedMethods,
+            final Set<MethodData> unmappedMethods,
+            final Map<MethodData, String> configurationNameByMethodDatas,
+            final Map<String, InputConfiguration> configurationsByName,
+            final OutputConfiguration outputConfiguration
     ) {
-        final BiMap<MethodNode, Integer> methodIds = HashBiMap.create();
-        final BiMap<ParameterNode, Integer> parameterIds = HashBiMap.create();
+        final BiMap<MethodData, Integer> methodIds = HashBiMap.create();
 
         mappedMethods.forEach((nextGenMethod, currentGenMethod) -> {
-            final String originalConfigurationName = configurationNameByMethodNodes.get(currentGenMethod);
+            final String originalConfigurationName = configurationNameByMethodDatas.get(currentGenMethod);
             final InputConfiguration originalConfiguration = configurationsByName.get(originalConfigurationName);
 
-            final ClassNode currentGenOwner = classNodesByMethodNodes.get(currentGenMethod);
-            final ClassNode nextGenOwner = classNodesByMethodNodes.get(nextGenMethod);
-
             final int methodId = originalConfiguration.identifier()
-                                   .map(identifier -> identifier.getMethodIdentity(currentGenOwner, currentGenMethod))
-                                   .orElseGet(() -> outputConfiguration.identifier().getMethodIdentity(nextGenOwner, nextGenMethod));
-            
+                    .map(identifier -> identifier.getMethodIdentity(currentGenMethod))
+                    .orElseGet(() -> outputConfiguration.identifier().getMethodIdentity(nextGenMethod));
+
             methodIds.put(nextGenMethod, methodId);
-
-            if (nextGenMethod.parameters != null)
-            {
-                for (int i = 0; i < nextGenMethod.parameters.size(); i++)
-                {
-                    final ParameterNode nextGenParameter = nextGenMethod.parameters.get(i);
-                    final Type nextGenDescriptor = Type.getMethodType(nextGenMethod.desc);
-                    if (currentGenMethod.parameters != null && currentGenMethod.parameters.size() > i) {
-                        final ParameterNode currentGenParameter = currentGenMethod.parameters.get(i);
-                        final Type currentGenDescriptor = Type.getMethodType(currentGenMethod.desc);
-
-                        if (nextGenParameter.name.equals(currentGenParameter.name) &&
-                              nextGenDescriptor.getArgumentTypes()[i].equals(currentGenDescriptor.getArgumentTypes()[i]))
-                        {
-                            final int parameterIndex = i;
-                            final int parameterId = originalConfiguration.identifier()
-                              .map(identifier -> identifier.getParameterIdentity(
-                                currentGenOwner, currentGenMethod, currentGenParameter, parameterIndex
-                              ))
-                              .orElseGet(() -> outputConfiguration.identifier().getParameterIdentity(
-                                nextGenOwner, nextGenMethod, nextGenParameter, parameterIndex
-                              ));
-
-                            if (parameterId >= 0) {
-                                parameterIds.put(nextGenParameter, parameterId);
-
-                                continue;
-                            }
-                        }
-                    }
-
-                    final int parameterId = outputConfiguration.identifier().getParameterIdentity(
-                      nextGenOwner, nextGenMethod, nextGenParameter, i
-                    );
-                    parameterIds.put(nextGenParameter, parameterId);
-                }
-            }
         });
-        
+
         unmappedMethods.forEach(nextGenMethod -> {
-            final ClassNode nextGenOwner = classNodesByMethodNodes.get(nextGenMethod);
-            final int methodId = outputConfiguration.identifier().getMethodIdentity(nextGenOwner, nextGenMethod);
-            
+            final int methodId = outputConfiguration.identifier().getMethodIdentity(nextGenMethod);
+
             methodIds.put(nextGenMethod, methodId);
-
-            if (nextGenMethod.parameters != null) {
-                for (int i = 0; i < nextGenMethod.parameters.size(); i++)
-                {
-                    final boolean nextGenIsStatic = (nextGenMethod.access & Opcodes.ACC_STATIC) != 0;
-
-                    final ParameterNode nextGenParameter = nextGenMethod.parameters.get(i);
-                    final int parameterId = outputConfiguration.identifier().getParameterIdentity(
-                      nextGenOwner, nextGenMethod, nextGenParameter, i + (nextGenIsStatic ? 0 : 1)
-                    );
-                    parameterIds.put(nextGenParameter, parameterId);
-                }
-            }
         });
-        
-        return new MethodIdMappingResult(methodIds, parameterIds);
+
+        return methodIds;
+    }
+
+    private BiMap<ParameterData, Integer> determineParameterIds(
+            final BiMap<ParameterData, ParameterData> mappedParameters,
+            final Set<ParameterData> unmappedParameters,
+            final Map<ParameterData, String> configurationNameByParameterDatas,
+            final Map<String, InputConfiguration> configurationsByName,
+            final OutputConfiguration outputConfiguration
+    ) {
+        final BiMap<ParameterData, Integer> parameterIds = HashBiMap.create();
+
+        mappedParameters.forEach((nextGenParameter, currentGenParameter) -> {
+            final String originalConfigurationName = configurationNameByParameterDatas.get(currentGenParameter);
+            final InputConfiguration originalConfiguration = configurationsByName.get(originalConfigurationName);
+
+            final int parameterId = originalConfiguration.identifier()
+                    .map(identifier -> identifier.getParameterIdentity(currentGenParameter))
+                    .orElseGet(() -> outputConfiguration.identifier().getParameterIdentity(nextGenParameter));
+
+            parameterIds.put(nextGenParameter, parameterId);
+        });
+
+        unmappedParameters.forEach(nextGenParameter -> {
+            final int parameterId = outputConfiguration.identifier().getParameterIdentity(nextGenParameter);
+
+            parameterIds.put(nextGenParameter, parameterId);
+        });
+
+        return parameterIds;
     }
 
     private void writeOutput(
-      final BiMap<ClassNode, Integer> classIds,
-      final BiMap<MethodNode, Integer> methodIds,
-      final BiMap<FieldNode, Integer> fieldIds,
-      final BiMap<ParameterNode, Integer> parameterIds,
-      final OutputConfiguration outputConfiguration,
-      final LoadedASMData asmData)
-    {
+            final BiMap<IASMData, String> nameByLoadedASMData,
+            final BiMap<String, Optional<IExistingNameSupplier>> remapperByName,
+            final BiMap<ClassData, ClassData> classMappings,
+            final BiMap<FieldData, FieldData> fieldMappings,
+            final BiMap<MethodData, MethodData> methodMappings,
+            final BiMap<ParameterData, ParameterData> parameterMappings,
+            final BiMap<ClassData, Integer> classIds,
+            final BiMap<MethodData, Integer> methodIds,
+            final BiMap<FieldData, Integer> fieldIds,
+            final BiMap<ParameterData, Integer> parameterIds,
+            final OutputConfiguration outputConfiguration,
+            final IASMData asmData) {
         LOGGER.info("Creating named AST");
 
-        final INamedAST ast = outputConfiguration.astBuilder().build(
+        final INamedAST ast = outputConfiguration.astBuilderFactory().create(
+                nameByLoadedASMData,
+                remapperByName
+        ).build(
+                classMappings,
+                fieldMappings,
+                methodMappings,
+                parameterMappings,
                 classIds,
                 methodIds,
                 fieldIds,
@@ -687,15 +862,18 @@ public class Jammer implements IJammer
 
         LOGGER.info("Writing named AST");
         outputConfiguration.writer().write(
-          outputConfiguration.outputDirectory(),
-          outputConfiguration.metadataWritingConfiguration(),
-          ast
+                outputConfiguration.outputDirectory(),
+                outputConfiguration.metadataWritingConfiguration(),
+                ast
         );
     }
-    
-    record TransitionMappingResultKey(String currentGenName, String nextGenName) {}
 
-    record HistoricalClassMapping(ClassNode classNode, Set<MethodNode> unmappedMethods, Set<FieldNode> unmappedFields) {}
+    record TransitionMappingResultKey(String currentGenName, String nextGenName) {
+    }
 
-    record MethodIdMappingResult(BiMap<MethodNode, Integer> methodIds, BiMap<ParameterNode, Integer> parameterIds) { }
+    record HistoricalClassMapping(ClassData classData, Set<MethodData> unmappedMethods, Set<FieldData> unmappedFields) {
+    }
+
+    record HistoricalMethodMapping(MethodData methodData, Set<ParameterData> unmappedParameters) {
+    }
 }

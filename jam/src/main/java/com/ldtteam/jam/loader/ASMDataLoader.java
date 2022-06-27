@@ -1,17 +1,20 @@
 package com.ldtteam.jam.loader;
 
 import com.ldtteam.jam.rename.EnhancedClassRemapper;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.util.FilterUtils;
+import com.ldtteam.jam.util.MethodDataUtils;
 import com.ldtteam.jam.util.SetsUtil;
 import com.machinezoo.noexception.Exceptions;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ParameterNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +23,6 @@ import java.io.InputStream;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -47,29 +49,27 @@ public final class ASMDataLoader
     public static LoadedASMData load(final InputConfiguration inputConfiguration)
     {
         //Collect all classes.
-        final Set<ClassNode> classes = loadClasses(inputConfiguration);
+        final Set<ClassData> classes = loadClasses(inputConfiguration);
 
-        //Group the fields and methods into a map, so that we can stable sort them.
-        final Map<MethodNode, ClassNode> classNodesByMethodNodes = new HashMap<>();
-        final Map<FieldNode, ClassNode> classNodesByFieldNodes = new HashMap<>();
-        for (final ClassNode classNode : classes)
-        {
-            classNode.methods.forEach(node -> classNodesByMethodNodes.put(node, classNode));
-            classNode.fields.forEach(node -> classNodesByFieldNodes.put(node, classNode));
-        }
+        //Grab the method datas from them
+        final Set<MethodData> methods = classes.stream()
+          .flatMap(classData -> classData.node().methods.stream()
+                  .map(node -> new MethodData(classData, node)))
+          .collect(SetsUtil.methods());
 
-        //Grab the method nodes from them
-        final Set<MethodNode> methods = classes.stream()
-          .flatMap(classNode -> classNode.methods.stream())
-          .collect(SetsUtil.methods(classNodesByMethodNodes));
+        //And the field datas from them
+        final Set<FieldData> fields = classes.stream()
+          .flatMap(classData -> classData.node().fields.stream()
+                  .map(node -> new FieldData(classData, node)))
+          .collect(SetsUtil.fields());
 
-        //And the field nodes from them
-        final Set<FieldNode> fields = classes.stream()
-          .flatMap(classNode -> classNode.fields.stream())
-          .collect(SetsUtil.fields(classNodesByFieldNodes));
+        //Grab the parameter datas from the methods
+        final Set<ParameterData> parameters = methods.stream()
+                .flatMap(MethodDataUtils::parametersAsStream)
+                .collect(SetsUtil.parameters());
 
         //Collect all of them together.
-        return new LoadedASMData(inputConfiguration.name(), classes, methods, fields);
+        return new LoadedASMData(inputConfiguration.name(), classes, methods, fields, parameters);
     }
 
     /**
@@ -77,20 +77,20 @@ public final class ASMDataLoader
      * the input configuration has a remapper.
      *
      * @param inputConfiguration The input configuration to pull the jar path, and potentially a remapper from.
-     * @return The ASM class node data.
+     * @return The ASM class data data.
      */
-    private static Set<ClassNode> loadClasses(final InputConfiguration inputConfiguration)
+    private static Set<ClassData> loadClasses(final InputConfiguration inputConfiguration)
     {
         //Grab and pass along.
         return loadClasses(inputConfiguration.path(), inputConfiguration.remapper().orElse(null));
     }
 
-    private static Set<ClassNode> loadClasses(final Path filePath, @Nullable final IRemapper remapperOptional)
+    private static Set<ClassData> loadClasses(final Path filePath, @Nullable final IRemapper remapperOptional)
     {
         final Path root = getPackageRoot(filePath);
-        final Set<ClassNode> classesInTarget = new TreeSet<>(Comparator.comparing(classNode -> classNode.name));
+        final Set<ClassData> classesInTarget = new TreeSet<>(Comparator.comparing(classData -> classData.node().name));
 
-        final Function<Path, ClassNode> loader = remapperOptional == null ?
+        final Function<Path, ClassData> loader = remapperOptional == null ?
                                                    ASMDataLoader::loadClass :
                                                                               path -> loadClass(path, remapperOptional);
 
@@ -99,25 +99,25 @@ public final class ASMDataLoader
         walk(root)
           .filter(FilterUtils::isClassFile)
           .map(loader)
-          .peek(classNode -> classNode.methods.forEach(methodNode -> {
-              if (methodNode.parameters == null)
+          .peek(classData -> classData.node().methods.forEach(methodData -> {
+              if (methodData.parameters == null)
               {
-                  final Type methodDescriptor = Type.getMethodType(methodNode.desc);
+                  final Type methodDescriptor = Type.getMethodType(methodData.desc);
                   if (methodDescriptor.getArgumentTypes().length > 0)
                   {
-                      methodNode.parameters = new LinkedList<>();
+                      methodData.parameters = new LinkedList<>();
                       Type[] argumentTypes = methodDescriptor.getArgumentTypes();
                       for (int i = 0, argumentTypesLength = argumentTypes.length; i < argumentTypesLength; i++)
                       {
                           final int index = i;
 
-                          methodNode.parameters.add(
+                          methodData.parameters.add(
                             new ParameterNode(
                               remappedHandle
                                 .flatMap(remapper -> remapper.remapParameter(
-                                  classNode.name,
-                                  methodNode.name,
-                                  methodNode.desc,
+                                  classData.node().name,
+                                  methodData.name,
+                                  methodData.desc,
                                   "parameter " + index,
                                   index
                                 ))
@@ -149,7 +149,7 @@ public final class ASMDataLoader
         ).orElse(filePath);
     }
 
-    private static ClassNode loadClass(final Path classFilePath)
+    private static ClassData loadClass(final Path classFilePath)
     {
         final InputStream stream = createInputStream(classFilePath);
         final ClassReader classReader = createClassReader(stream);
@@ -159,10 +159,10 @@ public final class ASMDataLoader
 
         closeStream(stream);
 
-        return classNode;
+        return new ClassData(classNode);
     }
 
-    private static ClassNode loadClass(final Path classFilePath, final IRemapper remapper)
+    private static ClassData loadClass(final Path classFilePath, final IRemapper remapper)
     {
         final InputStream stream = createInputStream(classFilePath);
         final ClassReader classReader = createClassReader(stream);
@@ -174,7 +174,7 @@ public final class ASMDataLoader
 
         closeStream(stream);
 
-        return classNode;
+        return new ClassData(classNode);
     }
 
     private static Stream<Path> walk(final Path path)

@@ -9,11 +9,15 @@ public interface IMappingStatistics
 
     ITypedMappingStatistics getDirectFieldStatistics();
 
+    ITypedMappingStatistics getDirectParameterStatistics();
+
     ITypedMappingStatistics getRejuvenatedClassStatistics();
 
     ITypedMappingStatistics getRejuvenatedMethodStatistics();
 
     ITypedMappingStatistics getRejuvenatedFieldStatistics();
+
+    ITypedMappingStatistics getRejuvenatedParameterStatistics();
 
     ITypedMappingStatistics getRenamedClassStatistics();
 
@@ -21,9 +25,13 @@ public interface IMappingStatistics
 
     ITypedMappingStatistics getRenamedFieldStatistics();
 
+    ITypedMappingStatistics getRenamedParameterStatistics();
+
     ITypedMappingStatistics getTotalClassStatistics();
 
     ITypedMappingStatistics getTotalMethodStatistics();
 
     ITypedMappingStatistics getTotalFieldStatistics();
+
+    ITypedMappingStatistics getTotalParameterStatistics();
 }

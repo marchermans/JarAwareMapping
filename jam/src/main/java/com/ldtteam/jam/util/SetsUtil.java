@@ -1,12 +1,14 @@
 package com.ldtteam.jam.util;
 
 import com.google.common.collect.Sets;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 
-import java.util.*;
-import java.util.function.Function;
+import java.util.Comparator;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -18,29 +20,24 @@ public class SetsUtil
         throw new IllegalStateException("Can not instantiate an instance of: SetsUtil. This is a utility class");
     }
 
-    public static Collector<ClassNode, ?, Set<ClassNode>> classes()
+    public static Collector<ClassData, ?, Set<ClassData>> classes()
     {
-        return Collectors.toCollection(() -> new TreeSet<>(Comparator.comparing(classNode -> classNode.name)));
+        return Collectors.toCollection(() -> new TreeSet<>(Comparator.comparing(classData -> classData.node().name)));
     }
 
-    public static Collector<MethodNode, ?, Set<MethodNode>> methods(final Map<MethodNode, ClassNode> classNodesByMethodNodes)
+    public static Collector<MethodData, ?, Set<MethodData>> methods()
     {
-        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<MethodNode, String>comparing(node -> classNodesByMethodNodes.get(node).name).thenComparing(node -> node.name + node.desc)));
+        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<MethodData, String>comparing(data -> data.owner().node().name).thenComparing(data -> data.node().name + data.node().desc)));
     }
 
-    public static Collector<FieldNode, ?, Set<FieldNode>> fields(final Map<FieldNode, ClassNode> classNodeByFieldNodes)
+    public static Collector<FieldData, ?, Set<FieldData>> fields()
     {
-        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<FieldNode, String>comparing(node -> classNodeByFieldNodes.get(node).name).thenComparing(node -> node.name + node.desc)));
+        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<FieldData, String>comparing(data -> data.owner().node().name).thenComparing(data -> data.node().name + data.node().desc)));
     }
 
-    public static Collector<MethodNode, ?, Set<MethodNode>> methods(final Function<MethodNode, ClassNode> classNodeByMethodNodes)
+    public static Collector<ParameterData, ?, Set<ParameterData>> parameters()
     {
-        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<MethodNode, String>comparing(node -> classNodeByMethodNodes.apply(node).name).thenComparing(node -> node.name + node.desc)));
-    }
-
-    public static Collector<FieldNode, ?, Set<FieldNode>> fields(final Function<FieldNode, ClassNode> classNodeByFieldNodes)
-    {
-        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<FieldNode, String>comparing(node -> classNodeByFieldNodes.apply(node).name).thenComparing(node -> node.name + node.desc)));
+        return Collectors.toCollection(() -> new TreeSet<>(Comparator.<ParameterData, String>comparing(data -> data.classOwner().node().name).thenComparing(data -> data.owner().node().name + data.owner().node().desc).thenComparing(ParameterData::index)));
     }
 
     public static <T> Set<T> cloneSet(final Set<T> set)

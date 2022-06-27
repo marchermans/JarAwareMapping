@@ -2,6 +2,10 @@ package com.ldtteam.jam.ast;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.Maps;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataClass;
 import com.ldtteam.jam.spi.ast.named.INamedClass;
@@ -12,27 +16,34 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedFieldBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedMethodBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map;
 
-public class NamedClassBuilder implements com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder {
+public class NamedClassBuilder implements INamedClassBuilder
+{
+
+    public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id) {}
 
     public static INamedClassBuilder create(
-            IRemapper runtimeToASTRemapper, INameProvider<Integer> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder
-    ) {
+      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder
+    )
+    {
         return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder);
     }
 
-    private final IRemapper runtimeToASTRemapper;
-    private final INameProvider<Integer> classNameProvider;
-    private final INamedFieldBuilder namedFieldBuilder;
-    private final INamedMethodBuilder namedMethodBuilder;
+    private final IRemapper              runtimeToASTRemapper;
+    private final INameProvider<ClassNamingInformation> classNameProvider;
+    private final INamedFieldBuilder     namedFieldBuilder;
+    private final INamedMethodBuilder    namedMethodBuilder;
 
-    private NamedClassBuilder(IRemapper runtimeToASTRemapper, INameProvider<Integer> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder) {
+    private NamedClassBuilder(
+      IRemapper runtimeToASTRemapper,
+      INameProvider<ClassNamingInformation> classNameProvider,
+      INamedFieldBuilder namedFieldBuilder,
+      INamedMethodBuilder namedMethodBuilder)
+    {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         this.classNameProvider = classNameProvider;
         this.namedFieldBuilder = namedFieldBuilder;
@@ -40,30 +51,33 @@ public class NamedClassBuilder implements com.ldtteam.jam.spi.ast.named.builder.
     }
 
     @Override
-    public INamedClass build(
-            final ClassNode classNode,
-            final IMetadataAST metadataAST,
-            final Map<String, ClassNode> classNodesByAstName,
-            final Map<MethodNode, MethodNode> rootMethodsByOverride,
-            final BiMap<ClassNode, Integer> classIds,
-            final BiMap<FieldNode, Integer> fieldIds,
-            final BiMap<MethodNode, Integer> methodIds,
-            final BiMap<ParameterNode, Integer> parameterIds
-    ) {
-        final String originalClassName = runtimeToASTRemapper.remapClass(classNode.name)
-                .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classNode.name)));
+    public INamedClass build(final ClassData classData,
+                             final IMetadataAST metadataAST,
+                             final Map<String, ClassData> classDatasByAstName,
+                             final Map<MethodData, MethodData> rootMethodsByOverride,
+                             final BiMap<ClassData, ClassData> classMappings,
+                             final BiMap<FieldData, FieldData> fieldMappings,
+                             final BiMap<MethodData, MethodData> methodMappings,
+                             final BiMap<ParameterData, ParameterData> parameterMappings,
+                             final BiMap<ClassData, Integer> classIds,
+                             final BiMap<FieldData, Integer> fieldIds,
+                             final BiMap<MethodData, Integer> methodIds,
+                             final BiMap<ParameterData, Integer> parameterIds) {
+        final String originalClassName = runtimeToASTRemapper.remapClass(classData.node().name)
+                .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name)));
 
         final IMetadataClass classMetadata = metadataAST.getClassesByName().computeIfAbsent(originalClassName, (key) -> {
-            throw new IllegalStateException("Missing metadata for %s (%s)".formatted(classNode.name, key));
+            throw new IllegalStateException("Missing metadata for %s (%s)".formatted(classData.node().name, key));
         });
 
         final Map<String, String> identifiedFieldNamesByOriginalFieldName = Maps.newHashMap();
         final Collection<INamedField> fields = new ArrayList<>();
-        classNode.fields.forEach(fieldNode -> {
+        classData.node().fields.forEach(fieldNode -> {
             final INamedField field = namedFieldBuilder.build(
-                    classNode,
-                    fieldNode,
+                    classData,
+                    new FieldData(classData, fieldNode),
                     classMetadata,
+                    fieldMappings,
                     fieldIds
             );
 
@@ -72,14 +86,16 @@ public class NamedClassBuilder implements com.ldtteam.jam.spi.ast.named.builder.
         });
 
         final Collection<INamedMethod> methods = new ArrayList<>();
-        classNode.methods.forEach(methodNode -> {
+        classData.node().methods.forEach(methodNode -> {
             final INamedMethod method = namedMethodBuilder.build(
-                    classNode,
-                    methodNode,
+                    classData,
+                    new MethodData(classData, methodNode),
                     classMetadata,
-                    classNodesByAstName,
+                    classDatasByAstName,
                     rootMethodsByOverride,
                     identifiedFieldNamesByOriginalFieldName,
+                    methodMappings,
+                    parameterMappings,
                     methodIds,
                     parameterIds
             );
@@ -87,10 +103,16 @@ public class NamedClassBuilder implements com.ldtteam.jam.spi.ast.named.builder.
             methods.add(method);
         });
 
+        final ClassNamingInformation classNamingInformation = new ClassNamingInformation(
+                classData,
+                classMappings.get(classData),
+                classIds.get(classData)
+        );
+
         return new NamedClass(
                 originalClassName,
-                classNameProvider.getName(classIds.get(classNode)),
-                classIds.get(classNode),
+                classNameProvider.getName(classNamingInformation),
+                classIds.get(classData),
                 fields,
                 methods
         );

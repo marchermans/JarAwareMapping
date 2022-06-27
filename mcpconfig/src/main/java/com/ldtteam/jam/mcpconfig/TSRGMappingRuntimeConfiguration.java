@@ -20,7 +20,7 @@ public class TSRGMappingRuntimeConfiguration
     public static MappingRuntimeConfiguration create(MappingConfiguration mappingConfiguration) {
         final IMatcher<InsnList> instructionListMatcher = DelegatingInstructionListMatcher.create(
           DirectInstructionListMatcher.create(),
-          DiffBasedInstructionListMatcher.create(mappingConfiguration.mappingThresholdPercentage())
+          DiffBasedInstructionListMatcher.create(mappingConfiguration.mappingThresholdPercentage(), mappingConfiguration.minimalInstructionCount())
         );
 
         return new MappingRuntimeConfiguration(
@@ -40,7 +40,10 @@ public class TSRGMappingRuntimeConfiguration
               NameBasedMapper.methods()
             )
           ),
-          NameBasedMapper.fields()
+          NameBasedMapper.fields(),
+          AlignedMapper.parameters(
+            TypeAwareParameterMapper.create()
+          )
         );
     }
 }

@@ -19,7 +19,7 @@ public interface IASMData
      * @return The classes in the jar.
      */
     @NonNull
-    Set<ClassNode> classes();
+    Set<ClassData> classes();
 
     /**
      * Gives access to the method information in the jar.
@@ -27,12 +27,19 @@ public interface IASMData
      * @return The methods in the jar.
      */
     @NonNull
-    Set<MethodNode> methods();
+    Set<MethodData> methods();
 
     /**
      * Gives access to the field information in the jar.
      *
      * @return The fields in the jar.
      */
-    Set<FieldNode> fields();
+    Set<FieldData> fields();
+
+    /**
+     * Gives access to the parameter information in the jar.
+     *
+     * @return The parameters in the jar.
+     */
+    Set<ParameterData> parameters();
 }

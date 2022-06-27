@@ -1,13 +1,13 @@
 package com.ldtteam.jam.mcpconfig;
 
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.identification.INewIdentitySupplier;
 import com.machinezoo.noexception.Exceptions;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.INamedMappingFile;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,25 +50,25 @@ public class TSRGNewIdentitySupplier implements INewIdentitySupplier
     }
 
     @Override
-    public int getClassIdentity(final ClassNode classNode)
+    public int getClassIdentity(final ClassData classData)
     {
         return nextFreeId++;
     }
 
     @Override
-    public int getMethodIdentity(final ClassNode classNode, final MethodNode methodNode)
+    public int getMethodIdentity(final MethodData methodData)
     {
         return nextFreeId++;
     }
 
     @Override
-    public int getFieldIdentity(final ClassNode classNode, final FieldNode fieldNode)
+    public int getFieldIdentity(final FieldData fieldData)
     {
         return nextFreeId++;
     }
 
     @Override
-    public int getParameterIdentity(final ClassNode classNode, final MethodNode methodNode, final ParameterNode parameterNode, final int index)
+    public int getParameterIdentity(final ParameterData parameterData)
     {
         return nextFreeId++;
     }

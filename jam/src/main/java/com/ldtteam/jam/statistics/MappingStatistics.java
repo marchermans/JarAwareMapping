@@ -7,18 +7,22 @@ public final class MappingStatistics implements IMappingStatistics
     private final TypeMappingStatistics directClassStatistics  = new TypeMappingStatistics();
     private final TypeMappingStatistics directMethodStatistics = new TypeMappingStatistics();
     private final TypeMappingStatistics directFieldStatistics  = new TypeMappingStatistics();
+    private final TypeMappingStatistics directParameterStatistics = new TypeMappingStatistics();
 
     private final TypeMappingStatistics rejuvenatedClassStatistics  = new TypeMappingStatistics();
     private final TypeMappingStatistics rejuvenatedMethodStatistics = new TypeMappingStatistics();
     private final TypeMappingStatistics rejuvenatedFieldStatistics  = new TypeMappingStatistics();
+    private final TypeMappingStatistics rejuvenatedParameterStatistics = new TypeMappingStatistics();
 
     private final TypeMappingStatistics renamedClassStatistics  = new TypeMappingStatistics();
     private final TypeMappingStatistics renamedMethodStatistics = new TypeMappingStatistics();
     private final TypeMappingStatistics renamedFieldStatistics  = new TypeMappingStatistics();
+    private final TypeMappingStatistics renamedParameterStatistics = new TypeMappingStatistics();
 
     private final TypeMappingStatistics totalClassStatistics  = new TypeMappingStatistics();
     private final TypeMappingStatistics totalMethodStatistics = new TypeMappingStatistics();
     private final TypeMappingStatistics totalFieldStatistics  = new TypeMappingStatistics();
+    private final TypeMappingStatistics totalParameterStatistics = new TypeMappingStatistics();
 
     @Override
     public TypeMappingStatistics getDirectClassStatistics()
@@ -36,6 +40,10 @@ public final class MappingStatistics implements IMappingStatistics
     public TypeMappingStatistics getDirectFieldStatistics()
     {
         return directFieldStatistics;
+    }
+
+    public TypeMappingStatistics getDirectParameterStatistics() {
+        return directParameterStatistics;
     }
 
     @Override
@@ -57,6 +65,12 @@ public final class MappingStatistics implements IMappingStatistics
     }
 
     @Override
+    public TypeMappingStatistics getRejuvenatedParameterStatistics()
+    {
+        return rejuvenatedParameterStatistics;
+    }
+
+    @Override
     public TypeMappingStatistics getRenamedClassStatistics()
     {
         return renamedClassStatistics;
@@ -75,6 +89,11 @@ public final class MappingStatistics implements IMappingStatistics
     }
 
     @Override
+    public TypeMappingStatistics getRenamedParameterStatistics() {
+        return renamedParameterStatistics;
+    }
+
+    @Override
     public TypeMappingStatistics getTotalClassStatistics()
     {
         return totalClassStatistics;
@@ -90,5 +109,10 @@ public final class MappingStatistics implements IMappingStatistics
     public TypeMappingStatistics getTotalFieldStatistics()
     {
         return totalFieldStatistics;
+    }
+
+    @Override
+    public TypeMappingStatistics getTotalParameterStatistics() {
+        return totalParameterStatistics;
     }
 }

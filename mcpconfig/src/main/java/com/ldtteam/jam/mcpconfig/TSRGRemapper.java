@@ -11,6 +11,7 @@ import java.util.Optional;
 
 public class TSRGRemapper implements IRemapper
 {
+
     public static IRemapper createObfuscatedToOfficial(Path path) {
         return new TSRGRemapper(path, "right", "left");
     }
@@ -22,6 +23,10 @@ public class TSRGRemapper implements IRemapper
     private TSRGRemapper(final Path mappingFilePath, final String sourceSide, final String targetSide) {
         INamedMappingFile mappingFile = Exceptions.sneak().get(() -> INamedMappingFile.load(Files.newInputStream(mappingFilePath)));
         remapper = mappingFile.getMap(sourceSide, targetSide);
+    }
+
+    private TSRGRemapper(final IMappingFile remapper) {
+        this.remapper = remapper;
     }
 
     private final IMappingFile remapper;
@@ -61,5 +66,10 @@ public class TSRGRemapper implements IRemapper
     public Optional<String> remapPackage(final String packageName)
     {
         return Optional.ofNullable(remapper.remapPackage(packageName));
+    }
+
+    @Override
+    public IRemapper reverse() {
+        return new TSRGRemapper(remapper.reverse());
     }
 }

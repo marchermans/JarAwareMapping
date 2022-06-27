@@ -4,20 +4,16 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.ldtteam.jam.spi.asm.IASMData;
+import com.ldtteam.jam.spi.asm.*;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataClass;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataMethod;
-import com.ldtteam.jam.spi.ast.named.*;
+import com.ldtteam.jam.spi.ast.named.INamedAST;
+import com.ldtteam.jam.spi.ast.named.INamedClass;
 import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
-import com.ldtteam.jam.util.SetsUtil;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,66 +21,78 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class NamedASTBuilder implements INamedASTBuilder {
+public class NamedASTBuilder implements INamedASTBuilder
+{
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NamedASTBuilder.class);
 
     public static INamedASTBuilder create(
-            IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder
-    ) {
+      IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder
+    )
+    {
         return new NamedASTBuilder(runtimeToASTRemapper, asTtoRuntimeRemapper, classBuilder);
     }
 
-    private final IRemapper runtimeToASTRemapper;
-    private final IRemapper ASTtoRuntimeRemapper;
+    private final IRemapper          runtimeToASTRemapper;
+    private final IRemapper          ASTtoRuntimeRemapper;
     private final INamedClassBuilder classBuilder;
 
-    private NamedASTBuilder(IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder) {
+    private NamedASTBuilder(IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder)
+    {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         ASTtoRuntimeRemapper = asTtoRuntimeRemapper;
         this.classBuilder = classBuilder;
     }
 
-
     @Override
     public INamedAST build(
-            final BiMap<ClassNode, Integer> classIds,
-            final BiMap<MethodNode, Integer> methodIds,
-            final BiMap<FieldNode, Integer> fieldIds,
-            final BiMap<ParameterNode, Integer> parameterIds,
-            final IASMData asmData,
-            final IMetadataAST metadataAST
-    ) {
-        record ClassNodesByMethodNodeEntry(ClassNode classNode, MethodNode methodNode) {}
-        final Map<MethodNode, ClassNode> classNodesByMethodNode = asmData.classes().stream()
-                .flatMap(classNode -> classNode.methods.stream().map(methodNode -> new ClassNodesByMethodNodeEntry(classNode, methodNode)))
-                .collect(Collectors.toMap(ClassNodesByMethodNodeEntry::methodNode, ClassNodesByMethodNodeEntry::classNode));
-        final Map<ClassNode, LinkedList<ClassNode>> inheritanceData = buildInheritanceData(asmData.classes());
-        final Map<MethodNode, MethodNode> rootMethodsByOverride = buildForcedMethods(
-                asmData.methods(),
-                inheritanceData,
-                classNodesByMethodNode,
-                methodIds,
-                metadataAST
+      final BiMap<ClassData, ClassData> classMappings,
+      final BiMap<FieldData, FieldData> fieldMappings,
+      final BiMap<MethodData, MethodData> methodMappings,
+      final BiMap<ParameterData, ParameterData> parameterMappings,
+      final BiMap<ClassData, Integer> classIds,
+      final BiMap<MethodData, Integer> methodIds,
+      final BiMap<FieldData, Integer> fieldIds,
+      final BiMap<ParameterData, Integer> parameterIds,
+      final IASMData asmData,
+      final IMetadataAST metadataAST
+    )
+    {
+        record ClassDatasByMethodDataEntry(ClassData classData, MethodData methodData) {}
+        final Map<MethodData, ClassData> classDatasByMethodData = asmData.classes().stream()
+                                                                    .flatMap(classData -> classData.node().methods.stream()
+                                                                                            .map(node -> new ClassDatasByMethodDataEntry(classData, new MethodData(classData, node))))
+                                                                    .collect(Collectors.toMap(ClassDatasByMethodDataEntry::methodData, ClassDatasByMethodDataEntry::classData));
+        final Map<ClassData, LinkedList<ClassData>> inheritanceData = buildInheritanceData(asmData.classes());
+        final Map<MethodData, MethodData> rootMethodsByOverride = buildForcedMethods(
+          asmData.methods(),
+          inheritanceData,
+          classDatasByMethodData,
+          methodIds,
+          metadataAST
         );
 
-        final Map<String, ClassNode> classNodesByASTName = asmData.classes().stream()
-                .collect(Collectors.toMap(
-                        classNode -> runtimeToASTRemapper.remapClass(classNode.name)
-                                .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classNode.name))),
-                        Function.identity()));
+        final Map<String, ClassData> classDatasByASTName = asmData.classes().stream()
+                                                             .collect(Collectors.toMap(
+                                                               classData -> runtimeToASTRemapper.remapClass(classData.node().name)
+                                                                              .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name))),
+                                                               Function.identity()));
 
         final Collection<INamedClass> classes = new ArrayList<>();
-        classIds.keySet().forEach(classNode -> {
+        classIds.keySet().forEach(classData -> {
             final INamedClass namedClass = classBuilder.build(
-                    classNode,
-                    metadataAST,
-                    classNodesByASTName,
-                    rootMethodsByOverride,
-                    classIds,
-                    fieldIds,
-                    methodIds,
-                    parameterIds
+              classData,
+              metadataAST,
+              classDatasByASTName,
+              rootMethodsByOverride,
+              classMappings,
+              fieldMappings,
+              methodMappings,
+              parameterMappings,
+              classIds,
+              fieldIds,
+              methodIds,
+              parameterIds
             );
 
             classes.add(namedClass);
@@ -93,40 +101,40 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return new NamedAST(classes);
     }
 
-    private Map<ClassNode, LinkedList<ClassNode>> buildInheritanceData(final Collection<ClassNode> classes)
+    private Map<ClassData, LinkedList<ClassData>> buildInheritanceData(final Collection<ClassData> classes)
     {
-        final Map<String, ClassNode> classNodesByName = classes.stream()
-                .collect(Collectors.toMap(INameProvider.classes(), Function.identity()));
+        final Map<String, ClassData> classDatasByName = classes.stream()
+                                                          .collect(Collectors.toMap(INameProvider.classes(), Function.identity()));
 
         return classes.stream()
-                .collect(Collectors.toMap(Function.identity(), classNode -> getInheritanceOf(classNodesByName, classNode.name, Sets.newHashSet())));
+                 .collect(Collectors.toMap(Function.identity(), classData -> getInheritanceOf(classDatasByName, classData.node().name, Sets.newHashSet())));
     }
 
-    private LinkedList<ClassNode> getInheritanceOf(final Map<String, ClassNode> classNodesByName, final String className, final Set<ClassNode> superTypes)
+    private LinkedList<ClassData> getInheritanceOf(final Map<String, ClassData> classDatasByName, final String className, final Set<ClassData> superTypes)
     {
-        final ClassNode classNode = classNodesByName.get(className);
-        if (classNode == null)
+        final ClassData classData = classDatasByName.get(className);
+        if (classData == null)
         {
             return new LinkedList<>();
         }
 
-        final LinkedList<ClassNode> inheritance = new LinkedList<>();
-        superTypes.add(classNode);
-        inheritance.add(classNode);
+        final LinkedList<ClassData> inheritance = new LinkedList<>();
+        superTypes.add(classData);
+        inheritance.add(classData);
 
-        final String superClassName = classNode.superName;
+        final String superClassName = classData.node().superName;
         if (superClassName != null)
         {
-            final LinkedList<ClassNode> superInheritance = getInheritanceOf(classNodesByName, superClassName, superTypes);
+            final LinkedList<ClassData> superInheritance = getInheritanceOf(classDatasByName, superClassName, superTypes);
             inheritance.addAll(superInheritance);
         }
 
-        final List<String> interfaces = classNode.interfaces;
+        final List<String> interfaces = classData.node().interfaces;
         if (interfaces != null)
         {
             for (String interfaceName : interfaces)
             {
-                final LinkedList<ClassNode> superInheritance = getInheritanceOf(classNodesByName, interfaceName, superTypes);
+                final LinkedList<ClassData> superInheritance = getInheritanceOf(classDatasByName, interfaceName, superTypes);
                 inheritance.addAll(superInheritance);
             }
         }
@@ -134,65 +142,67 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return inheritance;
     }
 
-    private Map<MethodNode, MethodNode> buildForcedMethods(
-            final Collection<MethodNode> methods,
-            final Map<ClassNode, LinkedList<ClassNode>> classInheritanceData,
-            final Map<MethodNode, ClassNode> classNodesByMethodNode,
-            final BiMap<MethodNode, Integer> methodIds,
-            final IMetadataAST metadataAST)
+    private Map<MethodData, MethodData> buildForcedMethods(
+      final Collection<MethodData> methods,
+      final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
+      final Map<MethodData, ClassData> classDatasByMethodData,
+      final BiMap<MethodData, Integer> methodIds,
+      final IMetadataAST metadataAST)
     {
-        final Map<MethodReference, MethodNode> methodsByReference = collectMethodReferences(methods, classNodesByMethodNode);
-        final Multimap<MethodNode, MethodNode> overrides = collectMethodOverrides(methods, classInheritanceData, classNodesByMethodNode, metadataAST, methodsByReference);
-        final Set<Set<MethodNode>> combinedTrees = buildOverrideTrees(overrides);
+        final Map<MethodReference, MethodData> methodsByReference = collectMethodReferences(methods, classDatasByMethodData);
+        final Multimap<MethodData, MethodData> overrides = collectMethodOverrides(methods, classInheritanceData, classDatasByMethodData, metadataAST, methodsByReference);
+        final Set<Set<MethodData>> combinedTrees = buildOverrideTrees(overrides);
         return determineIdsPerOverrideTree(methodIds, combinedTrees);
     }
 
-    public Map<MethodReference, MethodNode> collectMethodReferences(
-      final Collection<MethodNode> methods,
-      final Map<MethodNode, ClassNode> classNodesByMethodNode
-    ) {
-        final Map<MethodReference, MethodNode> methodsByReference = new HashMap<>();
-        methods.forEach(methodNode -> {
-            if (methodNode.name.startsWith("<"))
+    public Map<MethodReference, MethodData> collectMethodReferences(
+      final Collection<MethodData> methods,
+      final Map<MethodData, ClassData> classDatasByMethodData
+    )
+    {
+        final Map<MethodReference, MethodData> methodsByReference = new HashMap<>();
+        methods.forEach(methodData -> {
+            if (methodData.node().name.startsWith("<"))
             {
                 return;
             }
 
-            final ClassNode classNode = classNodesByMethodNode.get(methodNode);
+            final ClassData classData = classDatasByMethodData.get(methodData);
             methodsByReference.put(
-              new MethodReference(classNode.name, methodNode.name, methodNode.desc),
-              methodNode
+              new MethodReference(classData.node().name, methodData.node().name, methodData.node().desc),
+              methodData
             );
         });
         return methodsByReference;
     }
 
-    public Multimap<MethodNode, MethodNode> collectMethodOverrides(
-      final Collection<MethodNode> methods,
-      final Map<ClassNode, LinkedList<ClassNode>> classInheritanceData,
-      final Map<MethodNode, ClassNode> classNodesByMethodNode,
+    public Multimap<MethodData, MethodData> collectMethodOverrides(
+      final Collection<MethodData> methods,
+      final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
+      final Map<MethodData, ClassData> classDatasByMethodData,
       final IMetadataAST metadataAST,
-      final Map<MethodReference, MethodNode> methodsByReference
-    ) {
+      final Map<MethodReference, MethodData> methodsByReference
+    )
+    {
 
-        final Multimap<MethodNode, MethodNode> overrides = HashMultimap.create();
+        final Multimap<MethodData, MethodData> overrides = HashMultimap.create();
         methods.forEach(
-          methodNode -> {
-              if (methodNode.name.startsWith("<"))
+          methodData -> {
+              if (methodData.node().name.startsWith("<"))
               {
                   return;
               }
 
-              final ClassNode classNode = classNodesByMethodNode.get(methodNode);
-              collectMethodOverridesFromASMData(classInheritanceData, overrides, methodNode, classNode);
+              final ClassData classData = classDatasByMethodData.get(methodData);
+              collectMethodOverridesFromASMData(classInheritanceData, overrides, methodData, classData);
 
-              final IMetadataMethod methodInfo = getMetadataForMethod(metadataAST, methodNode, classNode);
+              final IMetadataMethod methodInfo = getMetadataForMethod(metadataAST, methodData, classData);
               if (methodInfo == null)
               {
                   return;
               }
 
-              collectMethodOverridesFromMetadata(methodsByReference, overrides, methodNode, methodInfo);
+              collectMethodOverridesFromMetadata(methodsByReference, overrides, methodData, methodInfo);
           }
         );
 
@@ -200,65 +210,75 @@ public class NamedASTBuilder implements INamedASTBuilder {
     }
 
     private void collectMethodOverridesFromASMData(
-      final Map<ClassNode, LinkedList<ClassNode>> classInheritanceData,
-      final Multimap<MethodNode, MethodNode> overrides,
-      final MethodNode methodNode,
-      final ClassNode classNode)
+      final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
+      final Multimap<MethodData, MethodData> overrides,
+      final MethodData methodData,
+      final ClassData classData)
     {
-        final LinkedList<ClassNode> superTypes = classInheritanceData.getOrDefault(classNode, new LinkedList<>());
+        final LinkedList<ClassData> superTypes = classInheritanceData.getOrDefault(classData, new LinkedList<>());
         if (!superTypes.isEmpty())
         {
-            superTypes.forEach(superType -> superType.methods.stream()
-                                              .filter(superMethodNode -> !superMethodNode.name.equals("<"))
-                                              .filter(superMethodNode -> superMethodNode.name.equals(methodNode.name) && superMethodNode.desc.equals(methodNode.desc))
-                                              .forEach(superMethodNode -> overrides.put(methodNode, superMethodNode)));
+            superTypes.forEach(superType -> superType.node().methods.stream()
+                                              .filter(superMethodData -> !superMethodData.name.equals("<"))
+                                              .filter(superMethodData -> superMethodData.name.equals(methodData.node().name) && superMethodData.desc.equals(methodData.node().desc))
+                                              .forEach(superMethodData -> overrides.put(methodData, new MethodData(superType, superMethodData))));
         }
     }
 
-    private IMetadataMethod getMetadataForMethod(final IMetadataAST metadataAST, final MethodNode methodNode, final ClassNode classNode)
+    private IMetadataMethod getMetadataForMethod(final IMetadataAST metadataAST, final MethodData methodData, final ClassData classData)
     {
-        final String obfuscatedOwnerClassName = runtimeToASTRemapper.remapClass(classNode.name)
-                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classNode.name)));
-        if (Objects.equals(obfuscatedOwnerClassName, classNode.name)) {
+        final String obfuscatedOwnerClassName = runtimeToASTRemapper.remapClass(classData.node().name)
+                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name)));
+        if (Objects.equals(obfuscatedOwnerClassName, classData.node().name))
+        {
             //Not an obfuscated class. Ignore
             return null;
         }
-        if (!metadataAST.getClassesByName().containsKey(obfuscatedOwnerClassName)) {
+        if (!metadataAST.getClassesByName().containsKey(obfuscatedOwnerClassName))
+        {
             //Not a class we have metadata for, would be weird, so log and ignore.
-            LOGGER.warn("Could not find metadata for class: " + classNode.name + " its obfuscated class name: " + obfuscatedOwnerClassName + " does not seems to be found in the json metadata.");
+            LOGGER.warn("Could not find metadata for class: " + classData.node().name + " its obfuscated class name: " + obfuscatedOwnerClassName
+                          + " does not seems to be found in the json metadata.");
             return null;
         }
         final IMetadataClass classInfo = metadataAST.getClassesByName().get(obfuscatedOwnerClassName);
-        if (classInfo == null) {
+        if (classInfo == null)
+        {
             //Not a class we have metadata for, would be weird, so log and ignore.
-            LOGGER.warn("Could not find metadata for class: " + classNode.name + " its obfuscated class name: " + obfuscatedOwnerClassName + " does not seems to be found in the json metadata.");
+            LOGGER.warn("Could not find metadata for class: " + classData.node().name + " its obfuscated class name: " + obfuscatedOwnerClassName
+                          + " does not seems to be found in the json metadata.");
             return null;
         }
 
-        final String obfuscatedMethodName = runtimeToASTRemapper.remapMethod(classNode.name, methodNode.name, methodNode.desc)
-                                              .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(methodNode.name, classNode.name)));
-        if (Objects.equals(obfuscatedMethodName, methodNode.name)) {
+        final String obfuscatedMethodName = runtimeToASTRemapper.remapMethod(classData.node().name, methodData.node().name, methodData.node().desc)
+                                              .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(methodData.node().name, classData.node().name)));
+        if (Objects.equals(obfuscatedMethodName, methodData.node().name))
+        {
             //Not obfuscated method without metadata. Ignore
             return null;
         }
-        final String obfuscatedDescriptor = runtimeToASTRemapper.remapDescriptor(methodNode.desc)
-                                              .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor: %s".formatted(methodNode.desc)));
-        if (classInfo.getMethodsByName() == null) {
+        final String obfuscatedDescriptor = runtimeToASTRemapper.remapDescriptor(methodData.node().desc)
+                                              .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor: %s".formatted(methodData.node().desc)));
+        if (classInfo.getMethodsByName() == null)
+        {
             throw new IllegalStateException("The given class does contain methods");
         }
         final IMetadataMethod methodInfo = classInfo.getMethodsByName().get(obfuscatedMethodName + obfuscatedDescriptor);
-        if (methodInfo == null) {
+        if (methodInfo == null)
+        {
             //Not a class we have metadata for, would be weird, so log and ignore.
-            LOGGER.warn("Could not find metadata for method: %s(%s) in class: %s does not seems to be found in the json metadata.".formatted(methodNode.name, methodNode.desc, classNode.name));
+            LOGGER.warn("Could not find metadata for method: %s(%s) in class: %s does not seems to be found in the json metadata.".formatted(methodData.node().name,
+              methodData.node().desc,
+              classData.node().name));
             return null;
         }
         return methodInfo;
     }
 
     private void collectMethodOverridesFromMetadata(
-      final Map<MethodReference, MethodNode> methodsByReference,
-      final Multimap<MethodNode, MethodNode> overrides,
-      final MethodNode methodNode,
+      final Map<MethodReference, MethodData> methodsByReference,
+      final Multimap<MethodData, MethodData> overrides,
+      final MethodData methodData,
       final IMetadataMethod methodInfo)
     {
         if (methodInfo.getOverrides() == null)
@@ -276,50 +296,53 @@ public class NamedASTBuilder implements INamedASTBuilder {
               if (officialClassName == null || officialDescriptor == null
                     || officialClassName.equals(method.getOwner()) || officialDescriptor.equals(method.getDesc()))
               {
-                  //Not remappable or not obfuscated. Ignore.
+                  //Not re-mappable or not obfuscated. Ignore.
                   return null;
               }
 
               final String officialMethodName = ASTtoRuntimeRemapper.remapMethod(method.getOwner(), method.getName(), method.getDesc())
-                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(method.getName(), method.getOwner())));
+                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(method.getName(),
+                                                    method.getOwner())));
               final MethodReference reference = new MethodReference(officialClassName, officialMethodName, officialDescriptor);
-              if (!methodsByReference.containsKey(reference)) {
+              if (!methodsByReference.containsKey(reference))
+              {
                   //Not a class we have metadata for, would be weird, so log and ignore.
-                  LOGGER.warn("Could not find method node for method: %s(%s) in class: %s".formatted(officialMethodName, officialDescriptor, officialDescriptor));
+                  LOGGER.warn("Could not find method data for method: %s(%s) in class: %s".formatted(officialMethodName, officialDescriptor, officialDescriptor));
                   return null;
               }
 
               return methodsByReference.get(reference);
           })
           .filter(Objects::nonNull)
-          .forEach(superMethodNode -> overrides.put(methodNode, superMethodNode));
+          .forEach(superMethodData -> overrides.put(methodData, superMethodData));
     }
 
-    public Set<Set<MethodNode>> buildOverrideTrees(
-      final Multimap<MethodNode, MethodNode> overrides
-    ) {
-        final Set<MethodNode> processedNode = Sets.newHashSet();
-        final Set<Set<MethodNode>> combinedTrees = Sets.newHashSet();
-        final Map<MethodNode, Collection<MethodNode>> overrideBranchMap = overrides.asMap();
+    public Set<Set<MethodData>> buildOverrideTrees(
+      final Multimap<MethodData, MethodData> overrides
+    )
+    {
+        final Set<MethodData> processedData = Sets.newHashSet();
+        final Set<Set<MethodData>> combinedTrees = Sets.newHashSet();
+        final Map<MethodData, Collection<MethodData>> overrideBranchMap = overrides.asMap();
 
         overrideBranchMap.keySet().forEach(
-          overridenMethod -> {
-              if (processedNode.contains(overridenMethod))
+          overriddenMethod -> {
+              if (processedData.contains(overriddenMethod))
               {
                   return;
               }
 
-              if (overrideBranchMap.get(overridenMethod).size() == 1)
+              if (overrideBranchMap.get(overriddenMethod).size() == 1)
               {
-                  if (overrideBranchMap.get(overridenMethod).contains(overridenMethod))
+                  if (overrideBranchMap.get(overriddenMethod).contains(overriddenMethod))
                   {
                       return;
                   }
               }
 
-              processedNode.add(overridenMethod);
-              final Set<MethodNode> workingSet = Sets.newHashSet(overrides.get(overridenMethod));
-              for (final Collection<MethodNode> overrideBranch : overrideBranchMap.values())
+              processedData.add(overriddenMethod);
+              final Set<MethodData> workingSet = Sets.newHashSet(overrides.get(overriddenMethod));
+              for (final Collection<MethodData> overrideBranch : overrideBranchMap.values())
               {
                   if (overrideBranch.stream().anyMatch(workingSet::contains))
                   {
@@ -328,32 +351,33 @@ public class NamedASTBuilder implements INamedASTBuilder {
               }
 
               combinedTrees.add(workingSet);
-              processedNode.addAll(workingSet);
+              processedData.addAll(workingSet);
           }
         );
 
         return combinedTrees;
     }
 
-    public Map<MethodNode, MethodNode> determineIdsPerOverrideTree(
-      final BiMap<MethodNode, Integer> methodIds,
-      final Set<Set<MethodNode>> combinedTrees
-    ) {
-        final BiMap<Integer, MethodNode> methodNodesById = methodIds.inverse();
-        final Map<MethodNode, MethodNode> overridesByMethod = new HashMap<>();
-        for (final Set<MethodNode> combinedTree : combinedTrees)
+    public Map<MethodData, MethodData> determineIdsPerOverrideTree(
+      final BiMap<MethodData, Integer> methodIds,
+      final Set<Set<MethodData>> combinedTrees
+    )
+    {
+        final BiMap<Integer, MethodData> methodDatasById = methodIds.inverse();
+        final Map<MethodData, MethodData> overridesByMethod = new HashMap<>();
+        for (final Set<MethodData> combinedTree : combinedTrees)
         {
-            final MethodNode rootNode = combinedTree.stream()
+            final MethodData rootData = combinedTree.stream()
                                           .mapToInt(methodIds::get)
                                           .min()
                                           .stream()
-                                          .mapToObj(methodNodesById::get)
+                                          .mapToObj(methodDatasById::get)
                                           .findFirst()
-                                          .orElseThrow(() -> new IllegalStateException("No root node found"));
+                                          .orElseThrow(() -> new IllegalStateException("No root data found"));
 
-            for (final MethodNode methodNode : combinedTree)
+            for (final MethodData methodData : combinedTree)
             {
-                overridesByMethod.put(methodNode, rootNode);
+                overridesByMethod.put(methodData, rootData);
             }
         }
         return overridesByMethod;

@@ -18,8 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class TSRGStatisticsWriter implements IStatisticsWriter
-{
+public class TSRGStatisticsWriter implements IStatisticsWriter {
     public static IStatisticsWriter create() {
         return new TSRGStatisticsWriter();
     }
@@ -27,16 +26,14 @@ public class TSRGStatisticsWriter implements IStatisticsWriter
     private static final String STATISTICS_MD_FILE_NAME = "statistics.md";
     private static final Logger LOGGER = LoggerFactory.getLogger(TSRGStatisticsWriter.class);
 
-    private TSRGStatisticsWriter()
-    {
+    private TSRGStatisticsWriter() {
     }
 
     @Override
-    public void write(final Path outputDirectory, final IMappingStatistics mappingStatistics, Configuration configuration)
-    {
+    public void write(final Path outputDirectory, final IMappingStatistics mappingStatistics, Configuration configuration) {
         final String data = buildOutput(mappingStatistics, configuration.inputs());
 
-        if(configuration.outputConfiguration().statisticsWritingConfiguration().writeToConsole()) {
+        if (configuration.outputConfiguration().statisticsWritingConfiguration().writeToConsole()) {
             Arrays.stream(data.split("\n")).forEach(LOGGER::info);
         }
 
@@ -45,8 +42,7 @@ public class TSRGStatisticsWriter implements IStatisticsWriter
         }
     }
 
-    private String buildOutput(final IMappingStatistics mappingStatistics, final List<InputConfiguration> inputConfigurations)
-    {
+    private String buildOutput(final IMappingStatistics mappingStatistics, final List<InputConfiguration> inputConfigurations) {
         final StringBuilder outputBuilder = new StringBuilder();
 
         outputBuilder.append(new Heading("Jammer Statistics:", 2)).append("\r\n");
@@ -59,47 +55,49 @@ public class TSRGStatisticsWriter implements IStatisticsWriter
 
         outputBuilder.append(new Heading("Primary mapping statistics:", 3)).append("\r\n");
         Table.Builder primaryTableBuilder = new Table.Builder()
-                                       .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER, Table.ALIGN_CENTER, Table.ALIGN_CENTER)
-                                       .addRow("", "Not mapped", "Mapped", "Newly found")
-                                       .addRow("Classes", mappingStatistics.getDirectClassStatistics().getLost(), mappingStatistics.getDirectClassStatistics().getMapped(), mappingStatistics.getDirectClassStatistics().getFound())
-                                       .addRow("Methods", mappingStatistics.getDirectMethodStatistics().getLost(), mappingStatistics.getDirectMethodStatistics().getMapped(), mappingStatistics.getDirectMethodStatistics().getFound())
-                                       .addRow("Fields", mappingStatistics.getDirectFieldStatistics().getLost(), mappingStatistics.getDirectFieldStatistics().getMapped(), mappingStatistics.getDirectFieldStatistics().getFound());
+                .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER, Table.ALIGN_CENTER, Table.ALIGN_CENTER)
+                .addRow("", "Not mapped", "Mapped", "Newly found")
+                .addRow("Classes", mappingStatistics.getDirectClassStatistics().getLost(), mappingStatistics.getDirectClassStatistics().getMapped(), mappingStatistics.getDirectClassStatistics().getFound())
+                .addRow("Methods", mappingStatistics.getDirectMethodStatistics().getLost(), mappingStatistics.getDirectMethodStatistics().getMapped(), mappingStatistics.getDirectMethodStatistics().getFound())
+                .addRow("Fields", mappingStatistics.getDirectFieldStatistics().getLost(), mappingStatistics.getDirectFieldStatistics().getMapped(), mappingStatistics.getDirectFieldStatistics().getFound())
+                .addRow("Parameters", mappingStatistics.getDirectParameterStatistics().getLost(), mappingStatistics.getDirectParameterStatistics().getMapped(), mappingStatistics.getDirectParameterStatistics().getFound());
         outputBuilder.append(primaryTableBuilder.build()).append("\r\n");
 
         outputBuilder.append(new Heading("Rejuvenated mapping statistics:", 3)).append("\r\n");
         Table.Builder rejuvenatedTableBuilder = new Table.Builder()
-                                       .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
-                                       .addRow("", "Mapped")
-                                       .addRow("Classes", mappingStatistics.getRejuvenatedClassStatistics().getMapped())
-                                       .addRow("Methods", mappingStatistics.getRejuvenatedMethodStatistics().getMapped())
-                                       .addRow("Fields", mappingStatistics.getRejuvenatedFieldStatistics().getMapped());
+                .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
+                .addRow("", "Mapped")
+                .addRow("Classes", mappingStatistics.getRejuvenatedClassStatistics().getMapped())
+                .addRow("Methods", mappingStatistics.getRejuvenatedMethodStatistics().getMapped())
+                .addRow("Fields", mappingStatistics.getRejuvenatedFieldStatistics().getMapped())
+                .addRow("Parameters", mappingStatistics.getRejuvenatedParameterStatistics().getMapped());
         outputBuilder.append(rejuvenatedTableBuilder.build()).append("\r\n");
 
         outputBuilder.append(new Heading("Renamed mapping statistics:", 3)).append("\r\n");
         Table.Builder renamedTableBuilder = new Table.Builder()
-                                      .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
-                                      .addRow("", "Mapped")
-                                      .addRow("Methods", mappingStatistics.getRenamedMethodStatistics().getMapped())
-                                      .addRow("Fields", mappingStatistics.getRenamedFieldStatistics().getMapped());
+                .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
+                .addRow("", "Mapped")
+                .addRow("Methods", mappingStatistics.getRenamedMethodStatistics().getMapped())
+                .addRow("Fields", mappingStatistics.getRenamedFieldStatistics().getMapped())
+                .addRow("Parameters", mappingStatistics.getRenamedParameterStatistics().getMapped());
         outputBuilder.append(renamedTableBuilder.build()).append("\r\n");
 
         outputBuilder.append(new Heading("Total mapping statistics:", 3)).append("\r\n");
         Table.Builder totalTableBuilder = new Table.Builder()
-                                              .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
-                                              .addRow("", "Mapped", "Newly found")
-                                              .addRow("Classes", mappingStatistics.getTotalClassStatistics().getMapped(), mappingStatistics.getTotalClassStatistics().getFound())
-                                              .addRow("Methods", mappingStatistics.getTotalMethodStatistics().getMapped(), mappingStatistics.getTotalMethodStatistics().getFound())
-                                              .addRow("Fields", mappingStatistics.getTotalFieldStatistics().getMapped(), mappingStatistics.getTotalFieldStatistics().getFound());
+                .withAlignments(Table.ALIGN_RIGHT, Table.ALIGN_CENTER)
+                .addRow("", "Mapped", "Newly found")
+                .addRow("Classes", mappingStatistics.getTotalClassStatistics().getMapped(), mappingStatistics.getTotalClassStatistics().getFound())
+                .addRow("Methods", mappingStatistics.getTotalMethodStatistics().getMapped(), mappingStatistics.getTotalMethodStatistics().getFound())
+                .addRow("Fields", mappingStatistics.getTotalFieldStatistics().getMapped(), mappingStatistics.getTotalFieldStatistics().getFound())
+                .addRow("Parameters", mappingStatistics.getTotalParameterStatistics().getMapped(), mappingStatistics.getTotalParameterStatistics().getFound());
         outputBuilder.append(totalTableBuilder.build());
 
         return outputBuilder.toString();
     }
 
-    private List<String> getInputVersions(final List<InputConfiguration> inputConfigurations)
-    {
+    private List<String> getInputVersions(final List<InputConfiguration> inputConfigurations) {
         List<String> list = new ArrayList<>();
-        for (int i = 0; i < inputConfigurations.size(); i++)
-        {
+        for (int i = 0; i < inputConfigurations.size(); i++) {
             if (i != (inputConfigurations.size() - 1)) {
                 final InputConfiguration inputConfiguration = inputConfigurations.get(i);
                 list.add(inputConfiguration.name());
@@ -108,16 +106,12 @@ public class TSRGStatisticsWriter implements IStatisticsWriter
         return list;
     }
 
-    private void writeDataToFile(final Path outputDirectory, final String data)
-    {
+    private void writeDataToFile(final Path outputDirectory, final String data) {
         final Path outputFile = outputDirectory.resolve(STATISTICS_MD_FILE_NAME);
-        try
-        {
+        try {
             Files.deleteIfExists(outputFile);
             Files.write(outputFile, Arrays.stream(data.split("\r\n")).toList(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             LOGGER.error("Failed to write statistics to file: {}", outputFile, e);
         }
     }

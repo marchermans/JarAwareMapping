@@ -1,10 +1,11 @@
 package com.ldtteam.jam.spi.configuration;
 
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.mapping.IMapper;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 
-public record MappingRuntimeConfiguration(IMapper<ClassNode> classMapper, IMapper<MethodNode> methodMapper, IMapper<FieldNode> fieldMapper)
+public record MappingRuntimeConfiguration(IMapper<ClassData> classMapper, IMapper<MethodData> methodMapper, IMapper<FieldData> fieldMapper, IMapper<ParameterData> parameterMapper)
 {
 }

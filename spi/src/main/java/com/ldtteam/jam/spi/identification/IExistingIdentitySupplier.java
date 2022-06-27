@@ -1,17 +1,17 @@
 package com.ldtteam.jam.spi.identification;
 
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.ParameterNode;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 
 public interface IExistingIdentitySupplier
 {
-    int getClassIdentity(final ClassNode classNode);
+    int getClassIdentity(final ClassData classData);
 
-    int getMethodIdentity(final ClassNode classNode, final MethodNode methodNode);
+    int getMethodIdentity(final MethodData methodData);
 
-    int getFieldIdentity(final ClassNode classNode, final FieldNode fieldNode);
+    int getFieldIdentity(final FieldData fieldData);
 
-    int getParameterIdentity(final ClassNode classNode, final MethodNode methodNode, final ParameterNode parameterNode, final int index);
+    int getParameterIdentity(final ParameterData parameterData);
 }

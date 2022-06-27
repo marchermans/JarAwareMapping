@@ -2,11 +2,12 @@ package com.ldtteam.jam.mcpconfig;
 
 import com.google.common.collect.Lists;
 import com.ldtteam.jam.spi.IJammer;
-import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
+import com.ldtteam.jam.spi.ast.named.builder.factory.INamedASTBuilderFactory;
 import com.ldtteam.jam.spi.configuration.*;
 import com.ldtteam.jam.spi.identification.IExistingIdentitySupplier;
 import com.ldtteam.jam.spi.identification.INewIdentitySupplier;
 import com.ldtteam.jam.spi.metadata.IMetadataASTBuilder;
+import com.ldtteam.jam.spi.name.IExistingNameSupplier;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.Jammer;
 import com.ldtteam.jam.spi.writer.INamedASTOutputWriter;
@@ -29,6 +30,7 @@ public final class JammerRuntime
 
     private final IRemapperProducer obfuscatedToOfficialRemapperProducer;
     private final IExistingIdentitySupplierProducer existingIdentitySupplierProducer;
+    private final IExistingNameSupplierProducer existingNameSupplierProducer;
     private final INewIdentitySupplierProducer newIdentitySupplierProducer;
     private final INamedASTBuilderProducer      namedASTProducer;
     private final IMetadataASTBuilderProducer   metadataASTProducer;
@@ -37,15 +39,18 @@ public final class JammerRuntime
     private final IStatisticsWriterProducer statisticsWriterProducer;
 
     public JammerRuntime(
-      final IRemapperProducer obfuscatedToOfficialRemapperProducer,
-      final IExistingIdentitySupplierProducer existingIdentitySupplierProducer,
-      final INewIdentitySupplierProducer newIdentitySupplierProducer,
-      final INamedASTBuilderProducer namedASTProducer,
-      final IMetadataASTBuilderProducer metadataASTProducer,
-      final INamedASTOutputWriterProducer namedASTOutputWriterProducer,
-      final IMappingRuntimeConfigurationProducer mappingRuntimeConfigurationProducer, final IStatisticsWriterProducer statisticsWriterProducer) {
+            final IRemapperProducer obfuscatedToOfficialRemapperProducer,
+            final IExistingIdentitySupplierProducer existingIdentitySupplierProducer,
+            final IExistingNameSupplierProducer existingNameSupplierProducer,
+            final INewIdentitySupplierProducer newIdentitySupplierProducer,
+            final INamedASTBuilderProducer namedASTProducer,
+            final IMetadataASTBuilderProducer metadataASTProducer,
+            final INamedASTOutputWriterProducer namedASTOutputWriterProducer,
+            final IMappingRuntimeConfigurationProducer mappingRuntimeConfigurationProducer,
+            final IStatisticsWriterProducer statisticsWriterProducer) {
         this.obfuscatedToOfficialRemapperProducer = obfuscatedToOfficialRemapperProducer;
         this.existingIdentitySupplierProducer = existingIdentitySupplierProducer;
+        this.existingNameSupplierProducer = existingNameSupplierProducer;
         this.newIdentitySupplierProducer = newIdentitySupplierProducer;
         this.namedASTProducer = namedASTProducer;
         this.metadataASTProducer = metadataASTProducer;
@@ -126,6 +131,14 @@ public final class JammerRuntime
                                                                           .withOptionalArg()
                                                                           .ofType(Float.class);
 
+        final AbstractOptionSpec<Integer> minimalByteCodeSizeForFuzzyPatchingOption = parser.acceptsAll(
+                Lists.newArrayList("minimalByteCodeSizeForFuzzyPatching", "mbcsfp"),
+                "The minimal amount of byte code instructions for a method to apply fuzzy patching to.")
+                .withOptionalArg()
+                .ofType(Integer.class)
+                .defaultsTo(40);
+
+
         final AbstractOptionSpec<Boolean> writeStatisticsToDiskOption = parser.acceptsAll(
             Lists.newArrayList("writeStatisticsToDisk", "wsd"),
             "Indicates if the writer needs to write the statistics to disk.")
@@ -157,6 +170,7 @@ public final class JammerRuntime
 
         final List<Integer> mappingMinimalBytecodeSizes = parsed.valuesOf(mappingMinimalBytecodeSizesOption);
         final List<Float> mappingMinimalByteCodeMatchPercentage = parsed.valuesOf(mappingMinimalByteCodeMatchPercentageOption);
+        final int minimalByteCodeSizeForFuzzyPatching = parsed.valueOf(minimalByteCodeSizeForFuzzyPatchingOption);
 
         final boolean shouldWriteStatisticsToDisk = parsed.valueOf(writeStatisticsToDiskOption);
         final boolean shouldWriteStatisticsToLog = parsed.valueOf(writeStatisticsToLogOption);
@@ -184,17 +198,21 @@ public final class JammerRuntime
         {
             final String name = existingNames.get(i);
             final Path jar = existingJars.get(i).toPath();
-            final Optional<IRemapper> remapped = Optional.of(obfuscatedToOfficialRemapperProducer.from(existingMappings.get(i).toPath()));
-            final Optional<IExistingIdentitySupplier> identifier = Optional.of(existingIdentitySupplierProducer.from(
+            final Optional<IRemapper> remapped = Optional.ofNullable(obfuscatedToOfficialRemapperProducer.from(existingMappings.get(i).toPath()));
+            final Optional<IExistingIdentitySupplier> identifier = Optional.ofNullable(existingIdentitySupplierProducer.from(
               existingIdentifiers.get(i).toPath(),
               existingMappings.get(i).toPath()
             ));
+            final Optional<IExistingNameSupplier> names = Optional.ofNullable(existingNameSupplierProducer.from(
+                    existingIdentifiers.get(i).toPath(),
+                    existingMappings.get(i).toPath()
+            ));
 
-            inputConfigurations.add(new InputConfiguration(name, jar, remapped, identifier));
+            inputConfigurations.add(new InputConfiguration(name, jar, remapped, identifier, names));
         }
 
         inputConfigurations.add(
-          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(obfuscatedToOfficialRemapperProducer.from(inputMapping.toPath())), Optional.empty())
+          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(obfuscatedToOfficialRemapperProducer.from(inputMapping.toPath())), Optional.empty(), Optional.empty())
         );
 
         final OutputConfiguration outputConfiguration = new OutputConfiguration(
@@ -214,7 +232,7 @@ public final class JammerRuntime
                                                                     mappingMinimalByteCodeMatchPercentage::get,
                                                                     (a, b) -> b));
 
-        final MappingConfiguration mappingConfiguration = new MappingConfiguration(mappingThresholdPercentages);
+        final MappingConfiguration mappingConfiguration = new MappingConfiguration(mappingThresholdPercentages, minimalByteCodeSizeForFuzzyPatching);
 
         final MappingRuntimeConfiguration runtimeConfiguration = mappingRuntimeConfigurationProducer.create(mappingConfiguration);
 
@@ -248,6 +266,11 @@ public final class JammerRuntime
     }
 
     @FunctionalInterface
+    public interface IExistingNameSupplierProducer {
+        IExistingNameSupplier from(final Path runtimeMappings, final Path existingMappings);
+    }
+
+    @FunctionalInterface
     public interface INewIdentitySupplierProducer {
         INewIdentitySupplier from(final Path existingIdentifiers);
     }
@@ -255,7 +278,7 @@ public final class JammerRuntime
     @FunctionalInterface
     public interface INamedASTBuilderProducer
     {
-        INamedASTBuilder from(final Path inputMappingPath);
+        INamedASTBuilderFactory from(final Path inputMappingPath);
     }
 
     @FunctionalInterface

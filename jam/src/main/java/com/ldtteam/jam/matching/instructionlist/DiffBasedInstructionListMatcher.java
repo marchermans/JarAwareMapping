@@ -7,31 +7,38 @@ import com.github.difflib.patch.Patch;
 import com.ldtteam.jam.spi.matching.IMatcher;
 import com.ldtteam.jam.spi.matching.MatchingResult;
 import com.ldtteam.jam.util.InstructionNodeUtils;
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceMethodVisitor;
-import org.objectweb.asm.util.TraceModuleVisitor;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class DiffBasedInstructionListMatcher implements IMatcher<InsnList> {
 
-    public static IMatcher<InsnList> create(final Map<Integer, Float> mappingThresholdPercentage) {
-        return new DiffBasedInstructionListMatcher(mappingThresholdPercentage);
+    public static IMatcher<InsnList> create(final Map<Integer, Float> mappingThresholdPercentage, int minimalInstructionCount) {
+        return new DiffBasedInstructionListMatcher(mappingThresholdPercentage, minimalInstructionCount);
     }
 
     final Map<Integer, Float> mappingThresholdPercentage;
+    final int minimalInstructionCount;
 
-    private DiffBasedInstructionListMatcher(final Map<Integer, Float> mappingThresholdPercentage) {this.mappingThresholdPercentage = mappingThresholdPercentage;}
+    private DiffBasedInstructionListMatcher(final Map<Integer, Float> mappingThresholdPercentage, final int minimalInstructionCount) {this.mappingThresholdPercentage = mappingThresholdPercentage;
+        this.minimalInstructionCount = minimalInstructionCount;
+    }
 
 
     @Override
     public MatchingResult match(InsnList left, InsnList right) {
         final List<InstructionNodeComparisonDelegate> leftInstructions = toComparisonArray(left);
         final List<InstructionNodeComparisonDelegate> rightInstructions = toComparisonArray(right);
+
+        if (leftInstructions.size() < minimalInstructionCount)
+            return MatchingResult.UNKNOWN;
+
+        if (rightInstructions.size() < minimalInstructionCount)
+            return MatchingResult.UNKNOWN;
 
         Patch<InstructionNodeComparisonDelegate> patch = DiffUtils.diff(leftInstructions, rightInstructions);
         final long deleteAndInsertCount = patch.getDeltas().stream().map(AbstractDelta::getType)

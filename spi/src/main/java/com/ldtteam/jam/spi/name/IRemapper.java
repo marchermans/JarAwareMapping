@@ -36,6 +36,11 @@ public interface IRemapper
             public Optional<String> remapPackage(String packageName) {
                 return Optional.of(packageName);
             }
+
+            @Override
+            public IRemapper reverse() {
+                return this;
+            }
         };
     }
 
@@ -50,4 +55,6 @@ public interface IRemapper
     Optional<String> remapParameter(String className, String methodName, String descriptor, final String parameterName, int index);
 
     Optional<String> remapPackage(String packageName);
+
+    IRemapper reverse();
 }

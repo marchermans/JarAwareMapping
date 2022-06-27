@@ -1,24 +1,29 @@
 package com.ldtteam.jam.spi.name;
 
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
+import com.ldtteam.jam.spi.asm.ClassData;
+import com.ldtteam.jam.spi.asm.FieldData;
+import com.ldtteam.jam.spi.asm.MethodData;
+import com.ldtteam.jam.spi.asm.ParameterData;
 
 import java.util.function.Function;
 
 @FunctionalInterface
 public interface INameProvider<T> extends Function<T, String>
 {
-    static INameProvider<ClassNode> classes() {
-        return node -> node.name;
+    static INameProvider<ClassData> classes() {
+        return data -> data.node().name;
     }
 
-    static INameProvider<MethodNode> methods() {
-        return node -> node.name + node.desc;
+    static INameProvider<MethodData> methods() {
+        return data -> data.node().name + data.node().desc;
     }
 
-    static INameProvider<FieldNode> fields() {
-        return node -> node.name;
+    static INameProvider<FieldData> fields() {
+        return data -> data.node().name;
+    }
+
+    static INameProvider<ParameterData> parameters() {
+        return data -> data.node().name;
     }
 
     String getName(T t);
