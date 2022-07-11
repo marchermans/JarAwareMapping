@@ -50,10 +50,6 @@ public class NamedParameterBuilder implements INamedParameterBuilder
       final BiMap<ParameterData, Integer> parameterIds
     )
     {
-        if (classData.node().name.contains("ArgumentSignatures") && methodData.node().name.equals("<init>")) {
-            System.out.println("Gotcha");
-        }
-
         final int parameterId = parameterIds.get(parameterData);
         final String obfuscatedParameterName = runtimeToASTRemapper.remapParameter(
           classData.node().name,
