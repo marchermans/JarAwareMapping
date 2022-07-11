@@ -50,6 +50,10 @@ public class NamedParameterBuilder implements INamedParameterBuilder
       final BiMap<ParameterData, Integer> parameterIds
     )
     {
+        if (classData.node().name.contains("ArgumentSignatures") && methodData.node().name.equals("<init>")) {
+            System.out.println("Gotcha");
+        }
+
         final int parameterId = parameterIds.get(parameterData);
         final String obfuscatedParameterName = runtimeToASTRemapper.remapParameter(
           classData.node().name,
@@ -66,7 +70,8 @@ public class NamedParameterBuilder implements INamedParameterBuilder
               classMetadata.getMethodsByName() != null &&
               classMetadata.getRecords() != null &&
               !classMetadata.getRecords().isEmpty() &&
-              methodData.node().parameters.size() == classMetadata.getRecords().size()
+              methodData.node().parameters.size() == classMetadata.getRecords().size() &&
+              isMatchingConstructor(parameterData, classMetadata, index)
         )
         {
             final IMetadataRecordComponent recordInfo = classMetadata.getRecords().get(index);
@@ -96,4 +101,19 @@ public class NamedParameterBuilder implements INamedParameterBuilder
     }
 
     private record NamedParameter(String originalName, String identifiedName, int id, int index) implements INamedParameter {}
+
+    private boolean isMatchingConstructor(final ParameterData constructorCandidate, IMetadataClass classMetadata, int index) {
+        if (constructorCandidate.owner().node().name.equals("<init>")) {
+            if (classMetadata.getMethodsByName() != null &&
+                classMetadata.getRecords() != null &&
+                !classMetadata.getRecords().isEmpty() &&
+                constructorCandidate.owner().node().parameters.size() == classMetadata.getRecords().size()
+            ) {
+                final IMetadataRecordComponent metadataRecordComponent = classMetadata.getRecords().get(index);
+                return runtimeToASTRemapper.remapDescriptor(constructorCandidate.desc()).map(descriptor -> descriptor.equals(metadataRecordComponent.getDesc())).orElse(false);
+            }
+        }
+
+        return false;
+    }
 }
