@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class NamedParameterBuilder implements INamedParameterBuilder
 {
@@ -105,8 +107,14 @@ public class NamedParameterBuilder implements INamedParameterBuilder
                 !classMetadata.getRecords().isEmpty() &&
                 constructorCandidate.owner().node().parameters.size() == classMetadata.getRecords().size()
             ) {
-                final IMetadataRecordComponent metadataRecordComponent = classMetadata.getRecords().get(index);
-                return runtimeToASTRemapper.remapDescriptor(constructorCandidate.desc()).map(descriptor -> descriptor.equals(metadataRecordComponent.getDesc())).orElse(false);
+                final Optional<String> caniconicalConstructor = runtimeToASTRemapper.remapDescriptor(
+                        constructorCandidate.owner().node().desc
+                );
+                final String caniconalConstructorCandidate = "(" + classMetadata.getRecords().stream().map(IMetadataRecordComponent::getDesc).collect(Collectors.joining()) + ")V";
+
+                return caniconicalConstructor
+                        .map(obfDescriptor -> obfDescriptor.equals(caniconalConstructorCandidate))
+                        .orElse(false);
             }
         }
 
