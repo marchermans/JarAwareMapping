@@ -12,7 +12,13 @@ public class TSRGIdentityNameProvider<T, N> implements INameProvider<T> {
 
     public static INameProvider<NamedClassBuilder.ClassNamingInformation> classes() {
         return new TSRGIdentityNameProvider<>(
-                (data) -> "net/minecraft/src/C_%d_".formatted(data.id())
+                (data) -> {
+                    if (data.outerNamedClass().isPresent()) {
+                        return data.outerNamedClass().get().identifiedName() + "$C_" + data.id() + "_";
+                    }
+
+                    return "net/minecraft/src/C_%d_".formatted(data.id());
+                }
         );
     }
 

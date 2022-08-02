@@ -24,6 +24,7 @@ public interface INamedClassBuilder
       BiMap<ClassData, Integer> classIds,
       BiMap<FieldData, Integer> fieldIds,
       BiMap<MethodData, Integer> methodIds,
-      BiMap<ParameterData, Integer> parameterIds
+      BiMap<ParameterData, Integer> parameterIds,
+      BiMap<String, INamedClass> alreadyNamedClasses
     );
 }

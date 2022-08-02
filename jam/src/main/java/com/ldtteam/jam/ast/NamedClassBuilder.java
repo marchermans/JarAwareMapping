@@ -16,15 +16,17 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedFieldBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedMethodBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
+import com.ldtteam.jam.util.NamingUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 
 public class NamedClassBuilder implements INamedClassBuilder
 {
 
-    public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id) {}
+    public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id, Optional<INamedClass> outerNamedClass) {}
 
     public static INamedClassBuilder create(
       IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder
@@ -62,7 +64,8 @@ public class NamedClassBuilder implements INamedClassBuilder
                              final BiMap<ClassData, Integer> classIds,
                              final BiMap<FieldData, Integer> fieldIds,
                              final BiMap<MethodData, Integer> methodIds,
-                             final BiMap<ParameterData, Integer> parameterIds) {
+                             final BiMap<ParameterData, Integer> parameterIds,
+                             final BiMap<String, INamedClass> alreadyNamedClasses) {
         final String originalClassName = runtimeToASTRemapper.remapClass(classData.node().name)
                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name)));
 
@@ -103,10 +106,14 @@ public class NamedClassBuilder implements INamedClassBuilder
             methods.add(method);
         });
 
+        final String outerClassName = NamingUtils.getOuterClassName(originalClassName);
+        final Optional<INamedClass> outerClassNaming = Optional.ofNullable(alreadyNamedClasses.get(outerClassName));
+
         final ClassNamingInformation classNamingInformation = new ClassNamingInformation(
                 classData,
                 classMappings.get(classData),
-                classIds.get(classData)
+                classIds.get(classData),
+                outerClassNaming
         );
 
         return new NamedClass(

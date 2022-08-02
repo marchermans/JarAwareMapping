@@ -1,6 +1,7 @@
 package com.ldtteam.jam.ast;
 
 import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
@@ -78,7 +79,7 @@ public class NamedASTBuilder implements INamedASTBuilder
                                                                               .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name))),
                                                                Function.identity()));
 
-        final Collection<INamedClass> classes = new ArrayList<>();
+        final BiMap<String, INamedClass> classes = HashBiMap.create();
         classIds.keySet().forEach(classData -> {
             final INamedClass namedClass = classBuilder.build(
               classData,
@@ -92,13 +93,14 @@ public class NamedASTBuilder implements INamedASTBuilder
               classIds,
               fieldIds,
               methodIds,
-              parameterIds
+              parameterIds,
+              classes
             );
 
-            classes.add(namedClass);
+            classes.put(namedClass.originalName(), namedClass);
         });
 
-        return new NamedAST(classes);
+        return new NamedAST(classes.values());
     }
 
     private Map<ClassData, LinkedList<ClassData>> buildInheritanceData(final Collection<ClassData> classes)
