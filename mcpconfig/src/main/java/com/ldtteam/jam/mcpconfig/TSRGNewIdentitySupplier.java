@@ -46,7 +46,7 @@ public class TSRGNewIdentitySupplier implements INewIdentitySupplier
             ))
            .mapToInt(Integer::parseInt)
            .max()
-           .orElse(-1);
+           .orElse(-1) + 1;
     }
 
     @Override
