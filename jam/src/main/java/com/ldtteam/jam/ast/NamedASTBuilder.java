@@ -15,6 +15,7 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
+import org.objectweb.asm.Opcodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -190,7 +191,7 @@ public class NamedASTBuilder implements INamedASTBuilder
         final Multimap<MethodData, MethodData> overrides = HashMultimap.create();
         methods.forEach(
           methodData -> {
-              if (methodData.node().name.startsWith("<"))
+              if (methodData.node().name.startsWith("<") || (methodData.node().access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE)) != 0)
               {
                   return;
               }
