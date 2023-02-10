@@ -9,6 +9,7 @@ import com.ldtteam.jam.spi.asm.*;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataClass;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataMethod;
+import com.ldtteam.jam.spi.ast.metadata.IMetadataMethodReference;
 import com.ldtteam.jam.spi.ast.named.INamedAST;
 import com.ldtteam.jam.spi.ast.named.INamedClass;
 import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
@@ -206,6 +207,8 @@ public class NamedASTBuilder implements INamedASTBuilder
               }
 
               collectMethodOverridesFromMetadata(methodsByReference, overrides, methodData, methodInfo);
+
+              collectMethodBouncersFromMetadata(methodsByReference, overrides, methodData, methodInfo);
           }
         );
 
@@ -291,33 +294,60 @@ public class NamedASTBuilder implements INamedASTBuilder
         }
 
         methodInfo.getOverrides().stream()
-          .map(method -> {
-              final String officialClassName = ASTtoRuntimeRemapper.remapClass(method.getOwner())
-                                                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(method.getOwner())));
-              final String officialDescriptor = ASTtoRuntimeRemapper.remapDescriptor(method.getDesc())
-                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor: %s".formatted(method.getDesc())));
-              if (officialClassName == null || officialDescriptor == null
-                    || officialClassName.equals(method.getOwner()) || officialDescriptor.equals(method.getDesc()))
-              {
-                  //Not re-mappable or not obfuscated. Ignore.
-                  return null;
-              }
-
-              final String officialMethodName = ASTtoRuntimeRemapper.remapMethod(method.getOwner(), method.getName(), method.getDesc())
-                                                  .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(method.getName(),
-                                                    method.getOwner())));
-              final MethodReference reference = new MethodReference(officialClassName, officialMethodName, officialDescriptor);
-              if (!methodsByReference.containsKey(reference))
-              {
-                  //Not a class we have metadata for, would be weird, so log and ignore.
-                  LOGGER.warn("Could not find method data for method: %s(%s) in class: %s".formatted(officialMethodName, officialDescriptor, officialDescriptor));
-                  return null;
-              }
-
-              return methodsByReference.get(reference);
-          })
+          .map(method -> getMethodData(methodsByReference, method))
           .filter(Objects::nonNull)
           .forEach(superMethodData -> overrides.put(methodData, superMethodData));
+    }
+
+    private void collectMethodBouncersFromMetadata(
+      final Map<MethodReference, MethodData> methodsByReference,
+      final Multimap<MethodData, MethodData> overrides,
+      final MethodData methodData,
+      final IMetadataMethod methodInfo)
+    {
+          if (methodInfo.getBouncer() == null)
+          {
+              //Is not a bouncer method
+              return;
+          }
+
+          MethodData target = getMethodData(methodsByReference, methodInfo.getBouncer().getTarget());
+          if (target == null)
+          {
+              return;
+          }
+
+          overrides.put(methodData, target);
+          overrides.putAll(methodData, overrides.get(target));
+    }
+
+    private MethodData getMethodData(
+      final Map<MethodReference, MethodData> methodsByReference,
+      final IMetadataMethodReference method)
+    {
+        final String officialClassName = ASTtoRuntimeRemapper.remapClass(method.getOwner())
+                                           .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(method.getOwner())));
+        final String officialDescriptor = ASTtoRuntimeRemapper.remapDescriptor(method.getDesc())
+                                            .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor: %s".formatted(method.getDesc())));
+        if (officialClassName == null || officialDescriptor == null
+              || officialClassName.equals(method.getOwner()) || officialDescriptor.equals(method.getDesc()))
+        {
+            //Not re-mappable or not obfuscated. Ignore.
+            return null;
+        }
+
+        final String officialMethodName = ASTtoRuntimeRemapper.remapMethod(method.getOwner(), method.getName(), method.getDesc())
+                                            .orElseThrow(() -> new IllegalStateException("Failed to remap method: %s in class: %s".formatted(method.getName(),
+                                              method.getOwner())));
+        final MethodReference reference = new MethodReference(officialClassName, officialMethodName, officialDescriptor);
+        if (!methodsByReference.containsKey(reference))
+        {
+            //Not a class we have metadata for, would be weird, so log and ignore.
+            LOGGER.warn("Could not find method data for method: %s(%s) in class: %s".formatted(officialMethodName, officialDescriptor, officialDescriptor));
+            return null;
+        }
+
+        return methodsByReference.get(reference);
     }
 
     public Set<Set<MethodData>> buildOverrideTrees(
