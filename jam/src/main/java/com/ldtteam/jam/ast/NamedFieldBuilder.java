@@ -66,7 +66,7 @@ public class NamedFieldBuilder implements INamedFieldBuilder
             identifiedFieldName = fieldData.node().name;
         }
 
-        if (identifiedFieldName == null && originalClassName.equals(fieldData.node().name))
+        if (identifiedFieldName == null && originalFieldName.equals(fieldData.node().name))
         {
             identifiedFieldName = fieldData.node().name;
         }
