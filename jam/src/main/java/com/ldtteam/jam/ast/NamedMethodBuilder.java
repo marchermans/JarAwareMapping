@@ -2,6 +2,7 @@ package com.ldtteam.jam.ast;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.ldtteam.jam.spi.asm.ClassData;
 import com.ldtteam.jam.spi.asm.MethodData;
@@ -15,6 +16,7 @@ import com.ldtteam.jam.spi.ast.named.INamedParameter;
 import com.ldtteam.jam.spi.ast.named.builder.INamedMethodBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedParameterBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
+import com.ldtteam.jam.spi.name.INotObfuscatedFilter;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.util.MethodDataUtils;
 
@@ -28,25 +30,29 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
     public record MethodNamingInformation(MethodData target, MethodData mappedFrom, Integer id) {}
 
     public static INamedMethodBuilder create(
-            IRemapper runtimeToASTRemapper, IRemapper metadataToRuntimeRemapper, INameProvider<MethodNamingInformation> methodNameProvider, INamedParameterBuilder parameterBuilder
+            IRemapper runtimeToASTRemapper, IRemapper metadataToRuntimeRemapper, INameProvider<MethodNamingInformation> methodNameProvider, INamedParameterBuilder parameterBuilder, INotObfuscatedFilter<ClassData> classNotObfuscatedFilter, INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter
     ) {
-        return new NamedMethodBuilder(runtimeToASTRemapper, metadataToRuntimeRemapper, methodNameProvider, parameterBuilder);
+        return new NamedMethodBuilder(runtimeToASTRemapper, metadataToRuntimeRemapper, methodNameProvider, parameterBuilder, classNotObfuscatedFilter, methodNotObfuscatedFilter);
     }
 
     private final IRemapper runtimeToASTRemapper;
     private final IRemapper metadataToRuntimeRemapper;
     private final INameProvider<MethodNamingInformation> methodNameProvider;
     private final INamedParameterBuilder parameterBuilder;
+    private final INotObfuscatedFilter<ClassData> classNotObfuscatedFilter;
+    private final INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter;
 
     private NamedMethodBuilder(
             IRemapper runtimeToASTRemapper,
             IRemapper metadataToRuntimeRemapper,
             INameProvider<MethodNamingInformation> methodNameProvider,
-            INamedParameterBuilder parameterBuilder) {
+            INamedParameterBuilder parameterBuilder, INotObfuscatedFilter<ClassData> classNotObfuscatedFilter, INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter) {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         this.metadataToRuntimeRemapper = metadataToRuntimeRemapper;
         this.methodNameProvider = methodNameProvider;
         this.parameterBuilder = parameterBuilder;
+        this.classNotObfuscatedFilter = classNotObfuscatedFilter;
+        this.methodNotObfuscatedFilter = methodNotObfuscatedFilter;
     }
 
     @Override
@@ -55,13 +61,14 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
             final MethodData methodData,
             final IMetadataClass classMetadata,
             final Map<String, ClassData> classDatasByAstName,
+            final Multimap<ClassData, ClassData> inheritanceVolumes,
             final Map<MethodData, MethodData> rootMethodsByOverride,
+            final Multimap<MethodData, MethodData> overrideTree,
             final Map<String, String> identifiedFieldNamesByOriginalName,
             final BiMap<MethodData, MethodData> methodMappings,
             final BiMap<ParameterData, ParameterData> parameterMappings,
             final BiMap<MethodData, Integer> methodIds,
-            final BiMap<ParameterData, Integer> parameterIds
-    ) {
+            final BiMap<ParameterData, Integer> parameterIds) {
         final String obfuscatedDescriptor = runtimeToASTRemapper.remapDescriptor(methodData.node().desc)
                 .orElseThrow(() -> new IllegalStateException("Failed to remap descriptor of method: %s in class: %s".formatted(methodData.node().name,
                         classData.node().name)));
@@ -93,6 +100,22 @@ public class NamedMethodBuilder implements INamedMethodBuilder {
 
         if (isMain(methodData)) {
             identifiedName = "main";
+        }
+
+        if (identifiedName == null &&
+                (
+                        classNotObfuscatedFilter.isNotObfuscated(classData) ||
+                        (inheritanceVolumes.containsKey(classData) && inheritanceVolumes.get(classData).stream().anyMatch(classNotObfuscatedFilter::isNotObfuscated))
+                )) {
+            identifiedName = methodData.node().name;
+        }
+
+        if (identifiedName == null &&
+                (
+                        methodNotObfuscatedFilter.isNotObfuscated(rootData) ||
+                        (overrideTree.containsKey(rootData) && overrideTree.get(rootData).stream().anyMatch(methodNotObfuscatedFilter::isNotObfuscated))
+                )) {
+            identifiedName = methodData.node().name;
         }
 
         if (identifiedName == null && methodMetadata.getOverrides() != null) {

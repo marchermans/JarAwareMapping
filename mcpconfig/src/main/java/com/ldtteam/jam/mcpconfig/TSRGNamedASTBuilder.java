@@ -4,11 +4,17 @@ import com.ldtteam.jam.ast.*;
 import com.ldtteam.jam.spi.ast.named.builder.*;
 import com.ldtteam.jam.spi.ast.named.builder.factory.INamedASTBuilderFactory;
 import com.ldtteam.jam.spi.name.INameProvider;
+import com.ldtteam.jam.spi.name.INotObfuscatedFilter;
 import com.ldtteam.jam.spi.name.IRemapper;
 
 import java.nio.file.Path;
 
 public class TSRGNamedASTBuilder {
+
+    public static final String[] DONT_OBFUSCATE_ANNOTATIONS = new String[] {
+            "Lcom/mojang/blaze3d/DontObfuscate;",
+            "Lnet/minecraft/obfuscate/DontObfuscate;"
+    };
 
     public static INamedASTBuilderFactory ast(final Path inputMappingPath) {
         return (nameByLoadedASMData, remapperByName) -> {
@@ -30,7 +36,8 @@ public class TSRGNamedASTBuilder {
                 officialToObfuscatedRemapper,
                 classNameProvider,
                 fieldBuilder,
-                methodBuilder
+                methodBuilder,
+                INotObfuscatedFilter.notObfuscatedClassIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS)
         );
     }
 
@@ -40,7 +47,9 @@ public class TSRGNamedASTBuilder {
 
         return NamedFieldBuilder.create(
                 officialToObfuscatedRemapper,
-                fieldNameProvider
+                fieldNameProvider,
+                INotObfuscatedFilter.notObfuscatedClassIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS),
+                INotObfuscatedFilter.notObfuscatedFieldIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS)
         );
     }
 
@@ -54,7 +63,9 @@ public class TSRGNamedASTBuilder {
                 officialToObfuscatedRemapper,
                 metadataToOfficialRemapper,
                 methodNameProvider,
-                parameterBuilder
+                parameterBuilder,
+                INotObfuscatedFilter.notObfuscatedClassIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS),
+                INotObfuscatedFilter.notObfuscatedMethodIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS)
         );
     }
 

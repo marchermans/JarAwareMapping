@@ -1,11 +1,14 @@
 package com.ldtteam.jam.util;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import com.ldtteam.jam.spi.asm.MethodData;
 import com.ldtteam.jam.spi.asm.ParameterData;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -47,5 +50,11 @@ public class MethodDataUtils {
         final Type methodDescriptor = Type.getMethodType(method.node().desc);
 
         return methodDescriptor.getArgumentTypes().length;
+    }
+
+    public static Multimap<MethodData, MethodData> buildOverrideTree(final Map<MethodData, MethodData> methodsByRoot) {
+        final Multimap<MethodData, MethodData> overrideTree = HashMultimap.create();
+        methodsByRoot.forEach(overrideTree::put);
+        return overrideTree;
     }
 }

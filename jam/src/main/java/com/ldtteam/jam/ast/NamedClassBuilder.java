@@ -2,6 +2,7 @@ package com.ldtteam.jam.ast;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.ldtteam.jam.spi.asm.ClassData;
 import com.ldtteam.jam.spi.asm.FieldData;
 import com.ldtteam.jam.spi.asm.MethodData;
@@ -15,6 +16,7 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedFieldBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedMethodBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
+import com.ldtteam.jam.spi.name.INotObfuscatedFilter;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.ldtteam.jam.util.NamingUtils;
 
@@ -29,34 +31,38 @@ public class NamedClassBuilder implements INamedClassBuilder
     public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id, Optional<INamedClass> outerNamedClass) {}
 
     public static INamedClassBuilder create(
-      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder
+      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter
     )
     {
-        return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder);
+        return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder, filter);
     }
 
     private final IRemapper              runtimeToASTRemapper;
     private final INameProvider<ClassNamingInformation> classNameProvider;
     private final INamedFieldBuilder     namedFieldBuilder;
     private final INamedMethodBuilder    namedMethodBuilder;
+    private final INotObfuscatedFilter<ClassData> filter;
 
     private NamedClassBuilder(
-      IRemapper runtimeToASTRemapper,
-      INameProvider<ClassNamingInformation> classNameProvider,
-      INamedFieldBuilder namedFieldBuilder,
-      INamedMethodBuilder namedMethodBuilder)
+            IRemapper runtimeToASTRemapper,
+            INameProvider<ClassNamingInformation> classNameProvider,
+            INamedFieldBuilder namedFieldBuilder,
+            INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter)
     {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         this.classNameProvider = classNameProvider;
         this.namedFieldBuilder = namedFieldBuilder;
         this.namedMethodBuilder = namedMethodBuilder;
+        this.filter = filter;
     }
 
     @Override
     public INamedClass build(final ClassData classData,
                              final IMetadataAST metadataAST,
                              final Map<String, ClassData> classDatasByAstName,
+                             final Multimap<ClassData, ClassData> inheritanceVolumes,
                              final Map<MethodData, MethodData> rootMethodsByOverride,
+                             final Multimap<MethodData, MethodData> overrideTree,
                              final BiMap<ClassData, ClassData> classMappings,
                              final BiMap<FieldData, FieldData> fieldMappings,
                              final BiMap<MethodData, MethodData> methodMappings,
@@ -80,6 +86,7 @@ public class NamedClassBuilder implements INamedClassBuilder
                     classData,
                     new FieldData(classData, fieldNode),
                     classMetadata,
+                    inheritanceVolumes,
                     fieldMappings,
                     fieldIds
             );
@@ -95,7 +102,9 @@ public class NamedClassBuilder implements INamedClassBuilder
                     new MethodData(classData, methodNode),
                     classMetadata,
                     classDatasByAstName,
+                    inheritanceVolumes,
                     rootMethodsByOverride,
+                    overrideTree,
                     identifiedFieldNamesByOriginalFieldName,
                     methodMappings,
                     parameterMappings,
@@ -116,9 +125,11 @@ public class NamedClassBuilder implements INamedClassBuilder
                 outerClassNaming
         );
 
+        String identifiedClassName = filter.isNotObfuscated(classData) ? classData.node().name : classNameProvider.getName(classNamingInformation);
+
         return new NamedClass(
                 originalClassName,
-                classNameProvider.getName(classNamingInformation),
+                identifiedClassName,
                 classIds.get(classData),
                 fields,
                 methods
