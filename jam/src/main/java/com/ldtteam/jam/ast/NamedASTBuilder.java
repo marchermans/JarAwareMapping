@@ -121,8 +121,7 @@ public class NamedASTBuilder implements INamedASTBuilder {
         for (ClassData classData : inheritanceData.keySet()) {
             final Set<ClassData> volume = inheritanceVolumes.computeIfAbsent(classData, d -> Sets.newHashSet());
             volume.add(classData);
-            inheritanceData.get(classData).forEach(inheritanceClassData -> volume.add(classData));
-            inheritanceVolumes.put(classData, volume);
+            volume.addAll(inheritanceData.get(classData));
         }
 
         final Multimap<ClassData, ClassData> inheritanceVolumesByClass = HashMultimap.create();

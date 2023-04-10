@@ -37,7 +37,8 @@ public class TSRGNamedASTBuilder {
                 classNameProvider,
                 fieldBuilder,
                 methodBuilder,
-                INotObfuscatedFilter.notObfuscatedClassIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS)
+                INotObfuscatedFilter.notObfuscatedClassIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS),
+                INotObfuscatedFilter.notObfuscatedMethodIfAnnotatedBy(DONT_OBFUSCATE_ANNOTATIONS)
         );
     }
 

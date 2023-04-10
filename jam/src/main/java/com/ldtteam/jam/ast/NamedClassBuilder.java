@@ -18,6 +18,7 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedMethodBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.INotObfuscatedFilter;
 import com.ldtteam.jam.spi.name.IRemapper;
+import com.ldtteam.jam.util.MethodDataUtils;
 import com.ldtteam.jam.util.NamingUtils;
 
 import java.util.ArrayList;
@@ -31,29 +32,33 @@ public class NamedClassBuilder implements INamedClassBuilder
     public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id, Optional<INamedClass> outerNamedClass) {}
 
     public static INamedClassBuilder create(
-      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter
+      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> classNotObfuscatedFilter, INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter
     )
     {
-        return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder, filter);
+        return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder, classNotObfuscatedFilter, methodNotObfuscatedFilter);
     }
 
     private final IRemapper              runtimeToASTRemapper;
     private final INameProvider<ClassNamingInformation> classNameProvider;
     private final INamedFieldBuilder     namedFieldBuilder;
     private final INamedMethodBuilder    namedMethodBuilder;
-    private final INotObfuscatedFilter<ClassData> filter;
+    private final INotObfuscatedFilter<ClassData> classNotObfuscatedFilter;
+    private final INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter;
 
     private NamedClassBuilder(
             IRemapper runtimeToASTRemapper,
             INameProvider<ClassNamingInformation> classNameProvider,
             INamedFieldBuilder namedFieldBuilder,
-            INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter)
+            INamedMethodBuilder namedMethodBuilder,
+            INotObfuscatedFilter<ClassData> classNotObfuscatedFilter,
+            INotObfuscatedFilter<MethodData> methodNotObfuscatedFilter)
     {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         this.classNameProvider = classNameProvider;
         this.namedFieldBuilder = namedFieldBuilder;
         this.namedMethodBuilder = namedMethodBuilder;
-        this.filter = filter;
+        this.classNotObfuscatedFilter = classNotObfuscatedFilter;
+        this.methodNotObfuscatedFilter = methodNotObfuscatedFilter;
     }
 
     @Override
@@ -125,7 +130,7 @@ public class NamedClassBuilder implements INamedClassBuilder
                 outerClassNaming
         );
 
-        String identifiedClassName = filter.isNotObfuscated(classData) ? classData.node().name : classNameProvider.getName(classNamingInformation);
+        String identifiedClassName = isNotObfuscated(classData, rootMethodsByOverride) ? classData.node().name : classNameProvider.getName(classNamingInformation);
 
         return new NamedClass(
                 originalClassName,
@@ -134,6 +139,14 @@ public class NamedClassBuilder implements INamedClassBuilder
                 fields,
                 methods
         );
+    }
+
+    private boolean isNotObfuscated(ClassData classData, Map<MethodData, MethodData> rootMethodsByOverride) {
+        return classNotObfuscatedFilter.isNotObfuscated(classData) || classData.node().methods.stream().anyMatch(methodNode -> {
+            final MethodData data = new MethodData(classData, methodNode);
+            final MethodData rootMethod = rootMethodsByOverride.getOrDefault(data, data);
+            return methodNotObfuscatedFilter.isNotObfuscated(rootMethod);
+        });
     }
 
     private record NamedClass(String originalName, String identifiedName, int id, Collection<INamedField> fields, Collection<INamedMethod> methods) implements INamedClass {}
