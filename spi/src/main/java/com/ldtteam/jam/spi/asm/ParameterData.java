@@ -2,5 +2,7 @@ package com.ldtteam.jam.spi.asm;
 
 import org.objectweb.asm.tree.ParameterNode;
 
-public record ParameterData(ClassData classOwner, MethodData owner, ParameterNode node, int index, String desc) {
+import java.util.Optional;
+
+public record ParameterData<TClassPayload, TMethodPayload, TParameterPayload>(ClassData<TClassPayload> classOwner, MethodData<TClassPayload, TMethodPayload> owner, ParameterNode node, int index, String desc, Optional<TParameterPayload> payload) {
 }

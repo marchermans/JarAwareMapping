@@ -12,6 +12,7 @@ import com.ldtteam.jam.spi.configuration.MappingRuntimeConfiguration;
 import com.ldtteam.jam.spi.configuration.OutputConfiguration;
 import com.ldtteam.jam.spi.mapping.MappingResult;
 import com.ldtteam.jam.spi.name.IExistingNameSupplier;
+import com.ldtteam.jam.spi.payload.IPayloadSupplier;
 import com.ldtteam.jam.statistics.MappingStatistics;
 import com.ldtteam.jam.util.MethodDataUtils;
 import com.ldtteam.jam.util.SetsUtil;
@@ -24,11 +25,11 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class Jammer implements IJammer {
+public class Jammer<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> implements IJammer<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> {
     private final Logger LOGGER = LoggerFactory.getLogger(Jammer.class);
 
     @Override
-    public void run(final Configuration configuration) {
+    public void run(final Configuration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> configuration) {
         LOGGER.info("Starting Jammer. Version: " + getClass().getPackage().getImplementationVersion());
         LOGGER.info("Validating configuration");
         validateConfiguration(configuration);
@@ -38,7 +39,7 @@ public class Jammer implements IJammer {
 
 
         LOGGER.info("Loading data...");
-        final Map<String, InputConfiguration> configurationsByName = configuration.inputs().stream()
+        final Map<String, InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>> configurationsByName = configuration.inputs().stream()
                 .collect(Collectors.toMap(InputConfiguration::name, Function.identity()));
 
         record RemapperCandidateByInputName(String name, Optional<IExistingNameSupplier> remapper) {
@@ -55,81 +56,92 @@ public class Jammer implements IJammer {
                 );
 
 
-        final Set<LoadedASMData> data = configuration.inputs().stream()
+        final Set<LoadedASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>> data = configuration.inputs().stream()
                 .map(ASMDataLoader::load)
                 .collect(Collectors.toSet());
 
-        record LoadedASMDataByInputName(String name, LoadedASMData data) {
+        record LoadedASMDataByInputName<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>(String name, LoadedASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> data) {
         }
-        final BiMap<String, IASMData> dataByInputName = data.stream()
-                .map(d -> new LoadedASMDataByInputName(d.name(), d))
+        final BiMap<String, IASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>> dataByInputName = data.stream()
+                .map(d -> new LoadedASMDataByInputName<>(d.name(), d))
                 .collect(Collectors.collectingAndThen(
                         Collectors.toMap(LoadedASMDataByInputName::name, LoadedASMDataByInputName::data),
                         HashBiMap::create));
-        record ConfigurationNameByClassDataEntry(ClassData classData, String name) {
+        record ConfigurationNameByClassDataEntry<TClassPayload>(ClassData<TClassPayload> classData, String name) {
         }
-        final Map<ClassData, String> configurationNameByClassDatas = data.stream()
+        final Map<ClassData<TClassPayload>, String> configurationNameByClassDatas = data.stream()
                 .flatMap(inputData -> inputData.classes()
                         .stream()
-                        .map(classData -> new ConfigurationNameByClassDataEntry(classData,
+                        .map(classData -> new ConfigurationNameByClassDataEntry<>(classData,
                                 inputData.name())))
                 .collect(Collectors.toMap(ConfigurationNameByClassDataEntry::classData,
                         ConfigurationNameByClassDataEntry::name));
 
-        record ConfigurationNameByMethodDataEntry(MethodData methodData, String name) {
+        record ConfigurationNameByMethodDataEntry<TClassPayload, TMethodPayload>(MethodData<TClassPayload, TMethodPayload> methodData, String name) {
         }
-        final Map<MethodData, String> configurationNameByMethodDatas = data.stream()
+        final Map<MethodData<TClassPayload, TMethodPayload>, String> configurationNameByMethodDatas = data.stream()
                 .flatMap(inputData -> inputData.methods()
                         .stream()
-                        .map(methodData -> new ConfigurationNameByMethodDataEntry(methodData,
+                        .map(methodData -> new ConfigurationNameByMethodDataEntry<>(methodData,
                                 inputData.name())))
                 .collect(Collectors.toMap(ConfigurationNameByMethodDataEntry::methodData,
                         ConfigurationNameByMethodDataEntry::name));
 
-        record ConfigurationNameByFieldDataEntry(FieldData fieldData, String name) {
+        record ConfigurationNameByFieldDataEntry<TClassPayload, TFieldPayload>(FieldData<TClassPayload, TFieldPayload> fieldData, String name) {
         }
-        final Map<FieldData, String> configurationNameByFieldDatas = data.stream()
+        final Map<FieldData<TClassPayload, TFieldPayload>, String> configurationNameByFieldDatas = data.stream()
                 .flatMap(inputData -> inputData.fields()
                         .stream()
-                        .map(fieldData -> new ConfigurationNameByFieldDataEntry(fieldData,
+                        .map(fieldData -> new ConfigurationNameByFieldDataEntry<>(fieldData,
                                 inputData.name())))
                 .collect(Collectors.toMap(ConfigurationNameByFieldDataEntry::fieldData,
                         ConfigurationNameByFieldDataEntry::name));
 
-        record ConfigurationNameByParameterDataEntry(ParameterData parameterData, String name) {
+        record ConfigurationNameByParameterDataEntry<TClassPayload, TMethodPayload, TParameterPayload>(ParameterData<TClassPayload, TMethodPayload, TParameterPayload> parameterData, String name) {
         }
-        final Map<ParameterData, String> configurationNameByParameterDatas = data.stream()
+        final Map<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, String> configurationNameByParameterDatas = data.stream()
                 .flatMap(inputData -> inputData.parameters()
                         .stream()
-                        .map(parameterData -> new ConfigurationNameByParameterDataEntry(parameterData,
+                        .map(parameterData -> new ConfigurationNameByParameterDataEntry<>(parameterData,
                                 inputData.name())))
                 .collect(Collectors.toMap(ConfigurationNameByParameterDataEntry::parameterData,
                         ConfigurationNameByParameterDataEntry::name));
 
-        record ClassDatasByMethodDataEntry(MethodData methodData, ClassData classData) {
+        record ClassDatasByMethodDataEntry<TClassPayload, TMethodPayload>(MethodData<TClassPayload, TMethodPayload> methodData, ClassData<TClassPayload> classData) {
         }
-        final Map<MethodData, ClassData> classDatasByMethodDatas = data.stream()
-                .flatMap(inputData -> inputData.classes().stream())
-                .flatMap(classData -> classData.node().methods.stream()
-                        .map(node -> new MethodData(classData, node))
-                        .map(methodData -> new ClassDatasByMethodDataEntry(methodData, classData)))
+        final Map<MethodData<TClassPayload, TMethodPayload>, ClassData<TClassPayload>> classDatasByMethodDatas = data.stream()
+                .flatMap(inputData -> {
+                    final InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> inputConfiguration = configurationsByName.get(inputData.name());
+                    return inputData.classes().stream()
+                            .flatMap(classData -> classData.node().methods.stream()
+                                    .map(node -> new MethodData<>(classData, node, inputConfiguration.payloads().orElse(IPayloadSupplier.empty()).forMethod(classData.node(), node)))
+                                    .map(methodData -> new ClassDatasByMethodDataEntry<>(methodData, classData)));
+                })
                 .collect(Collectors.toMap(ClassDatasByMethodDataEntry::methodData, ClassDatasByMethodDataEntry::classData));
 
-        record ClassDatasByFieldDataEntry(FieldData fieldData, ClassData classData) {
+        record ClassDatasByFieldDataEntry<TClassPayload, TFieldPayload>(FieldData<TClassPayload, TFieldPayload> fieldData, ClassData<TClassPayload> classData) {
         }
-        final Map<FieldData, ClassData> classDatasByFieldDatas = data.stream()
-                .flatMap(inputData -> inputData.classes().stream())
-                .flatMap(classData -> classData.node().fields.stream()
-                        .map(node -> new FieldData(classData, node))
-                        .map(fieldData -> new ClassDatasByFieldDataEntry(fieldData, classData)))
+        final Map<FieldData<TClassPayload, TFieldPayload>, ClassData<TClassPayload>> classDatasByFieldDatas = data.stream()
+                .flatMap(inputData -> {
+                    final InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> inputConfiguration = configurationsByName.get(inputData.name());
+                    return inputData.classes().stream()
+                            .flatMap(classData -> classData.node().fields.stream()
+                                    .map(node -> new FieldData<>(classData, node, inputConfiguration.payloads().orElse(IPayloadSupplier.empty()).forField(classData.node(), node)))
+                                    .map(fieldData -> new ClassDatasByFieldDataEntry<>(fieldData, classData)));
+                })
+
                 .collect(Collectors.toMap(ClassDatasByFieldDataEntry::fieldData, ClassDatasByFieldDataEntry::classData));
 
-        record MethodDatasByParameterDataEntry(ParameterData parameterData, MethodData methodData) {
+        record MethodDatasByParameterDataEntry<TClassPayload, TMethodPayload, TParameterPayload>(ParameterData<TClassPayload, TMethodPayload, TParameterPayload> parameterData, MethodData<TClassPayload, TMethodPayload> methodData) {
         }
-        final Map<ParameterData, MethodData> methodDatasByParameterDatas = data.stream()
-                .flatMap(inputData -> inputData.methods().stream())
-                .flatMap(methodData -> MethodDataUtils.parametersAsList(methodData).stream()
-                        .map(parameterData -> new MethodDatasByParameterDataEntry(parameterData, methodData)))
+        final Map<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, MethodData<TClassPayload, TMethodPayload>> methodDatasByParameterDatas = data.stream()
+                .flatMap(inputData -> {
+                    final InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> inputConfiguration = configurationsByName.get(inputData.name());
+                    return inputData.methods().stream()
+                            .flatMap(methodData -> MethodDataUtils.parametersAsList(methodData, inputConfiguration.payloads().orElse(IPayloadSupplier.empty())).stream()
+                                    .map(parameterData -> new MethodDatasByParameterDataEntry<>(parameterData, methodData)));
+                })
+
                 .collect(Collectors.toMap(MethodDatasByParameterDataEntry::parameterData, MethodDatasByParameterDataEntry::methodData));
 
         LOGGER.info("Mapping direct inputs...");
@@ -366,16 +378,16 @@ public class Jammer implements IJammer {
         }
     }
 
-    private LinkedHashMap<TransitionMappingResultKey, JarMappingResult> buildTransitionMap(final Configuration configuration, final Map<String, IASMData> dataByInputName) {
+    private <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> LinkedHashMap<TransitionMappingResultKey, JarMappingResult> buildTransitionMap(final Configuration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> configuration, final Map<String, IASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>> dataByInputName) {
         final LinkedHashMap<TransitionMappingResultKey, JarMappingResult> transitionMappingResults = Maps.newLinkedHashMap();
 
-        final LinkedList<InputConfiguration> inputs = new LinkedList<>(configuration.inputs());
+        final LinkedList<InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>> inputs = new LinkedList<>(configuration.inputs());
 
         while (
                 inputs.size() > 1
         ) {
-            InputConfiguration target = inputs.removeLast();
-            InputConfiguration current = inputs.peekLast();
+            InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> target = inputs.removeLast();
+            InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> current = inputs.peekLast();
 
             LOGGER.info("Mapping {} to {}", Objects.requireNonNull(current).name(), target.name());
 
@@ -525,20 +537,20 @@ public class Jammer implements IJammer {
         return transitiveMethodMappings;
     }
 
-    private JarMappingResult mapDirectly(final Set<ClassData> currentGenClasses, final Set<ClassData> nextGenClasses, final MappingRuntimeConfiguration runtimeConfiguration) {
-        final MappingResult<ClassData> classMappingResult = runtimeConfiguration.classMapper().map(nextGenClasses, currentGenClasses);
+    private JarMappingResult<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> mapDirectly(final Set<ClassData<TClassPayload>> currentGenClasses, final Set<ClassData<TClassPayload>> nextGenClasses, final MappingRuntimeConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> runtimeConfiguration) {
+        final MappingResult<ClassData<TClassPayload>> classMappingResult = runtimeConfiguration.classMapper().map(nextGenClasses, currentGenClasses);
 
-        final Set<MethodData> unmappedCurrentGenMethods = Sets.newHashSet();
-        final Set<MethodData> unmappedNextGenMethods = Sets.newHashSet();
-        final BiMap<MethodData, MethodData> mappedMethods = HashBiMap.create();
+        final Set<MethodData<TClassPayload, TMethodPayload>> unmappedCurrentGenMethods = Sets.newHashSet();
+        final Set<MethodData<TClassPayload, TMethodPayload>> unmappedNextGenMethods = Sets.newHashSet();
+        final BiMap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> mappedMethods = HashBiMap.create();
 
-        final Set<ParameterData> unmappedCurrentGenParameters = Sets.newHashSet();
-        final Set<ParameterData> unmappedNextGenParameters = Sets.newHashSet();
-        final BiMap<ParameterData, ParameterData> mappedParameters = HashBiMap.create();
+        final Set<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> unmappedCurrentGenParameters = Sets.newHashSet();
+        final Set<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> unmappedNextGenParameters = Sets.newHashSet();
+        final BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> mappedParameters = HashBiMap.create();
 
         classMappingResult.unmappedCandidates().stream()
                 .flatMap(classData -> classData.node().methods.stream()
-                        .map(method -> new MethodData(classData, method)))
+                        .map(method -> new MethodData<>(classData, method)))
                 .peek(methodData -> unmappedCurrentGenParameters.addAll(MethodDataUtils.parametersAsSet(methodData)))
                 .forEach(unmappedCurrentGenMethods::add);
 

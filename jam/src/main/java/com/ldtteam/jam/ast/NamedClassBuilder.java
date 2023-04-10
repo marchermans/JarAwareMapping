@@ -25,29 +25,29 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 
-public class NamedClassBuilder implements INamedClassBuilder
+public class NamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> implements INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>
 {
 
-    public record ClassNamingInformation(ClassData target, ClassData mappedFrom, Integer id, Optional<INamedClass> outerNamedClass) {}
+    public record ClassNamingInformation<TClassPayload>(ClassData<TClassPayload> target, ClassData<TClassPayload> mappedFrom, Integer id, Optional<INamedClass> outerNamedClass) {}
 
-    public static INamedClassBuilder create(
-      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter
+    public static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> create(
+      IRemapper runtimeToASTRemapper, INameProvider<ClassNamingInformation<TClassPayload>> classNameProvider, INamedFieldBuilder namedFieldBuilder, INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData<TClassPayload>> filter
     )
     {
-        return new NamedClassBuilder(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder, filter);
+        return new NamedClassBuilder<>(runtimeToASTRemapper, classNameProvider, namedFieldBuilder, namedMethodBuilder, filter);
     }
 
     private final IRemapper              runtimeToASTRemapper;
-    private final INameProvider<ClassNamingInformation> classNameProvider;
+    private final INameProvider<ClassNamingInformation<TClassPayload>> classNameProvider;
     private final INamedFieldBuilder     namedFieldBuilder;
     private final INamedMethodBuilder    namedMethodBuilder;
-    private final INotObfuscatedFilter<ClassData> filter;
+    private final INotObfuscatedFilter<ClassData<TClassPayload>> filter;
 
     private NamedClassBuilder(
             IRemapper runtimeToASTRemapper,
-            INameProvider<ClassNamingInformation> classNameProvider,
+            INameProvider<ClassNamingInformation<TClassPayload>> classNameProvider,
             INamedFieldBuilder namedFieldBuilder,
-            INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData> filter)
+            INamedMethodBuilder namedMethodBuilder, INotObfuscatedFilter<ClassData<TClassPayload>> filter)
     {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         this.classNameProvider = classNameProvider;
@@ -57,21 +57,20 @@ public class NamedClassBuilder implements INamedClassBuilder
     }
 
     @Override
-    public INamedClass build(final ClassData classData,
-                             final IMetadataAST metadataAST,
-                             final Map<String, ClassData> classDatasByAstName,
-                             final Multimap<ClassData, ClassData> inheritanceVolumes,
-                             final Map<MethodData, MethodData> rootMethodsByOverride,
-                             final Multimap<MethodData, MethodData> overrideTree,
-                             final BiMap<ClassData, ClassData> classMappings,
-                             final BiMap<FieldData, FieldData> fieldMappings,
-                             final BiMap<MethodData, MethodData> methodMappings,
-                             final BiMap<ParameterData, ParameterData> parameterMappings,
-                             final BiMap<ClassData, Integer> classIds,
-                             final BiMap<FieldData, Integer> fieldIds,
-                             final BiMap<MethodData, Integer> methodIds,
-                             final BiMap<ParameterData, Integer> parameterIds,
-                             final BiMap<String, INamedClass> alreadyNamedClasses) {
+    public INamedClass build(ClassData<TClassPayload> classData,
+                             IMetadataAST metadataAST,
+                             Map<String, ClassData<TClassPayload>> classDatasByAstName,
+                             Multimap<ClassData<TClassPayload>, ClassData<TClassPayload>> inheritanceVolumes,
+                             Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> rootMethodsByOverride,
+                             Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrideTree, BiMap<ClassData<TClassPayload>, ClassData<TClassPayload>> classMappings,
+                             BiMap<FieldData<TClassPayload, TFieldPayload>, FieldData<TClassPayload, TFieldPayload>> fieldMappings,
+                             BiMap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> methodMappings,
+                             BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> parameterMappings,
+                             BiMap<ClassData<TClassPayload>, Integer> classIds,
+                             BiMap<FieldData<TClassPayload, TFieldPayload>, Integer> fieldIds,
+                             BiMap<MethodData<TClassPayload, TMethodPayload>, Integer> methodIds,
+                             BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, Integer> parameterIds,
+                             BiMap<String, INamedClass> alreadyNamedClasses) {
         final String originalClassName = runtimeToASTRemapper.remapClass(classData.node().name)
                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name)));
 

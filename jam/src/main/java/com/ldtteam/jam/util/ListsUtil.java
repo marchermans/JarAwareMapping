@@ -18,7 +18,7 @@ public class ListsUtil
         throw new IllegalStateException("Can not instantiate an instance of: ListsUtil. This is a utility class");
     }
 
-    public static Collector<ClassData, ?, List<ClassData>> classes()
+    public static <TClassPayload>  Collector<ClassData<TClassPayload>, ?, List<ClassData<TClassPayload>>> classes()
     {
         return Collectors.collectingAndThen(
                 SetsUtil.classes(),
@@ -26,7 +26,7 @@ public class ListsUtil
         );
     }
 
-    public static Collector<MethodData, ?, List<MethodData>> methods()
+    public static <TClassPayload, TMethodPayload>  Collector<MethodData<TClassPayload, TMethodPayload>, ?, List<MethodData<TClassPayload, TMethodPayload>>> methods()
     {
         return Collectors.collectingAndThen(
                 SetsUtil.methods(),
@@ -34,7 +34,7 @@ public class ListsUtil
         );
     }
 
-    public static Collector<FieldData, ?, List<FieldData>> fields()
+    public static <TClassPayload, TFieldPayload>  Collector<FieldData<TClassPayload, TFieldPayload>, ?, List<FieldData<TClassPayload, TFieldPayload>>> fields()
     {
         return Collectors.collectingAndThen(
                 SetsUtil.fields(),
@@ -42,7 +42,7 @@ public class ListsUtil
         );
     }
 
-    public static Collector<ParameterData, ?, List<ParameterData>> parameters()
+    public static <TClassPayload, TMethodPayload, TParameterPayload>  Collector<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, ?, List<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>>> parameters()
     {
         return Collectors.collectingAndThen(
                 SetsUtil.parameters(),

@@ -8,7 +8,7 @@ import com.ldtteam.jam.spi.name.IRemapper;
 
 import java.util.Optional;
 
-public interface INamedASTBuilderFactory {
+public interface INamedASTBuilderFactory<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> {
 
-    INamedASTBuilder create(final BiMap<IASMData, String> nameByLoadedASMData, final BiMap<String, Optional<IExistingNameSupplier>> remapperByName);
+    INamedASTBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> create(final BiMap<IASMData, String> nameByLoadedASMData, final BiMap<String, Optional<IExistingNameSupplier>> remapperByName);
 }

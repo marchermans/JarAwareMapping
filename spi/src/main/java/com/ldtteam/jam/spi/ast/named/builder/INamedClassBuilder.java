@@ -11,22 +11,22 @@ import com.ldtteam.jam.spi.ast.named.INamedClass;
 
 import java.util.Map;
 
-public interface INamedClassBuilder
+public interface INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>
 {
     INamedClass build(
-            ClassData classData,
+            ClassData<TClassPayload> classData,
             IMetadataAST metadataAST,
-            Map<String, ClassData> classDatasByAstName,
-            Multimap<ClassData, ClassData> inheritanceVolumes,
-            Map<MethodData, MethodData> rootMethodsByOverride,
-            Multimap<MethodData, MethodData> overrideTree, BiMap<ClassData, ClassData> classMappings,
-            BiMap<FieldData, FieldData> fieldMappings,
-            BiMap<MethodData, MethodData> methodMappings,
-            BiMap<ParameterData, ParameterData> parameterMappings,
-            BiMap<ClassData, Integer> classIds,
-            BiMap<FieldData, Integer> fieldIds,
-            BiMap<MethodData, Integer> methodIds,
-            BiMap<ParameterData, Integer> parameterIds,
+            Map<String, ClassData<TClassPayload>> classDatasByAstName,
+            Multimap<ClassData<TClassPayload>, ClassData<TClassPayload>> inheritanceVolumes,
+            Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> rootMethodsByOverride,
+            Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrideTree, BiMap<ClassData<TClassPayload>, ClassData<TClassPayload>> classMappings,
+            BiMap<FieldData<TClassPayload, TFieldPayload>, FieldData<TClassPayload, TFieldPayload>> fieldMappings,
+            BiMap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> methodMappings,
+            BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> parameterMappings,
+            BiMap<ClassData<TClassPayload>, Integer> classIds,
+            BiMap<FieldData<TClassPayload, TFieldPayload>, Integer> fieldIds,
+            BiMap<MethodData<TClassPayload, TMethodPayload>, Integer> methodIds,
+            BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, Integer> parameterIds,
             BiMap<String, INamedClass> alreadyNamedClasses
     );
 }

@@ -7,6 +7,7 @@ import com.ldtteam.jam.spi.asm.MethodData;
 import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;
 import com.ldtteam.jam.spi.name.IRemapper;
+import com.ldtteam.jam.spi.payload.IPayloadSupplier;
 import com.ldtteam.jam.util.FilterUtils;
 import com.ldtteam.jam.util.MethodDataUtils;
 import com.ldtteam.jam.util.SetsUtil;
@@ -46,26 +47,27 @@ public final class ASMDataLoader
      * @param inputConfiguration The input configuration to load the bytecode data from.
      * @return The loaded ASM data.
      */
-    public static LoadedASMData load(final InputConfiguration inputConfiguration)
+    public static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> LoadedASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> load(final InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> inputConfiguration)
     {
+        final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloadSupplier = inputConfiguration.payloads().orElse(IPayloadSupplier.empty());
         //Collect all classes.
-        final Set<ClassData> classes = loadClasses(inputConfiguration);
+        final Set<ClassData<TClassPayload>> classes = loadClasses(inputConfiguration);
 
         //Grab the method datas from them
-        final Set<MethodData> methods = classes.stream()
+        final Set<MethodData<TClassPayload, TMethodPayload>> methods = classes.stream()
           .flatMap(classData -> classData.node().methods.stream()
-                  .map(node -> new MethodData(classData, node)))
+                  .map(node -> new MethodData<>(classData, node, payloadSupplier.forMethod(classData.node(), node))))
           .collect(SetsUtil.methods());
 
         //And the field datas from them
-        final Set<FieldData> fields = classes.stream()
+        final Set<FieldData<TClassPayload, TFieldPayload>> fields = classes.stream()
           .flatMap(classData -> classData.node().fields.stream()
-                  .map(node -> new FieldData(classData, node)))
+                  .map(node -> new FieldData<>(classData, node, payloadSupplier.forField(classData.node(), node))))
           .collect(SetsUtil.fields());
 
         //Grab the parameter datas from the methods
-        final Set<ParameterData> parameters = methods.stream()
-                .flatMap(MethodDataUtils::parametersAsStream)
+        final Set<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> parameters = methods.stream()
+                .flatMap(methodData -> MethodDataUtils.parametersAsStream(methodData, payloadSupplier))
                 .collect(SetsUtil.parameters());
 
         //Collect all of them together.
@@ -79,20 +81,28 @@ public final class ASMDataLoader
      * @param inputConfiguration The input configuration to pull the jar path, and potentially a remapper from.
      * @return The ASM class data data.
      */
-    private static Set<ClassData> loadClasses(final InputConfiguration inputConfiguration)
+    private static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> Set<ClassData<TClassPayload>> loadClasses(final InputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> inputConfiguration)
     {
         //Grab and pass along.
-        return loadClasses(inputConfiguration.path(), inputConfiguration.remapper().orElse(null));
+        return loadClasses(inputConfiguration.path(), inputConfiguration.remapper().orElse(null), inputConfiguration.payloads().orElse(IPayloadSupplier.empty()));
     }
 
-    private static Set<ClassData> loadClasses(final Path filePath, @Nullable final IRemapper remapperOptional)
+    /**
+     * Loads the classes in the given jar, performing the remapping if
+     * the input configuration has a remapper.
+     *
+     * @param filePath The path to the jar to load the classes from.
+     * @param remapperOptional The optional remapper to use.
+     * @return The ASM class data data.
+     */
+    private static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> Set<ClassData<TClassPayload>> loadClasses(final Path filePath, @Nullable final IRemapper remapperOptional, final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloads)
     {
         final Path root = getPackageRoot(filePath);
-        final Set<ClassData> classesInTarget = new TreeSet<>(Comparator.comparing(classData -> classData.node().name));
+        final Set<ClassData<TClassPayload>> classesInTarget = new TreeSet<>(Comparator.comparing(classData -> classData.node().name));
 
-        final Function<Path, ClassData> loader = remapperOptional == null ?
-                                                   ASMDataLoader::loadClass :
-                                                                              path -> loadClass(path, remapperOptional);
+        final Function<Path, ClassData<TClassPayload>> loader = remapperOptional == null ?
+                                                   path -> loadClass(path, payloads) :
+                                                                              path -> loadClass(path, remapperOptional, payloads);
 
         final Optional<IRemapper> remappedHandle = Optional.ofNullable(remapperOptional);
 
@@ -133,6 +143,12 @@ public final class ASMDataLoader
         return classesInTarget;
     }
 
+    /**
+     * Determines the root package in a given file path.
+     *
+     * @param filePath The file path to determine the root package of.
+     * @return The root package.
+     */
     private static Path getPackageRoot(final Path filePath)
     {
         return Exceptions.log(LOGGER).get(
@@ -149,7 +165,13 @@ public final class ASMDataLoader
         ).orElse(filePath);
     }
 
-    private static ClassData loadClass(final Path classFilePath)
+    /**
+     * Loads the class data from the given class file path.
+     *
+     * @param classFilePath The path to the class file to load.
+     * @return The ASM class data.
+     */
+    private static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> ClassData<TClassPayload> loadClass(final Path classFilePath, final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloads)
     {
         final InputStream stream = createInputStream(classFilePath);
         final ClassReader classReader = createClassReader(stream);
@@ -159,10 +181,17 @@ public final class ASMDataLoader
 
         closeStream(stream);
 
-        return new ClassData(classNode);
+        return new ClassData<>(classNode, payloads.forClass(classNode));
     }
 
-    private static ClassData loadClass(final Path classFilePath, final IRemapper remapper)
+    /**
+     * Loads the class data from the given class file path.
+     *
+     * @param classFilePath The path to the class file to load.
+     * @param remapper The remapper to use.
+     * @return The ASM class data.
+     */
+    private static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> ClassData<TClassPayload> loadClass(final Path classFilePath, final IRemapper remapper, final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloads)
     {
         final InputStream stream = createInputStream(classFilePath);
         final ClassReader classReader = createClassReader(stream);
@@ -174,9 +203,15 @@ public final class ASMDataLoader
 
         closeStream(stream);
 
-        return new ClassData(classNode);
+        return new ClassData<>(classNode, payloads.forClass(classNode));
     }
 
+    /**
+     * Walks the given path, returning a stream of all the paths.
+     *
+     * @param path The path to walk.
+     * @return The stream of paths.
+     */
     private static Stream<Path> walk(final Path path)
     {
         return Exceptions.log(LOGGER).get(
@@ -186,16 +221,33 @@ public final class ASMDataLoader
         ).orElse(Stream.empty());
     }
 
+    /**
+     * Creates an input stream from the given path.
+     *
+     * @param classFilePath The path to create the input stream from.
+     * @return The input stream.
+     */
     private static InputStream createInputStream(final Path classFilePath)
     {
         return Exceptions.sneak().get(() -> Files.newInputStream(classFilePath, StandardOpenOption.READ));
     }
 
+    /**
+     * Creates a class reader from the given input stream.
+     *
+     * @param inputStream The input stream to create the class reader from.
+     * @return The class reader.
+     */
     private static ClassReader createClassReader(final InputStream inputStream)
     {
         return Exceptions.sneak().get(() -> new ClassReader(inputStream));
     }
 
+    /**
+     * Closes the given input stream.
+     *
+     * @param stream The input stream to close.
+     */
     private static void closeStream(final InputStream stream)
     {
         Exceptions.sneak().run(stream::close);

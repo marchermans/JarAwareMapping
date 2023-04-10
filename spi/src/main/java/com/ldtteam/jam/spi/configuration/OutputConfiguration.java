@@ -8,6 +8,6 @@ import com.ldtteam.jam.spi.writer.IStatisticsWriter;
 
 import java.nio.file.Path;
 
-public record OutputConfiguration(Path outputDirectory, INewIdentitySupplier identifier, INamedASTBuilderFactory astBuilderFactory, IMetadataASTBuilder metadataProvider, INamedASTOutputWriter writer, IStatisticsWriter statisticsWriter, MetadataWritingConfiguration metadataWritingConfiguration, StatisticsWritingConfiguration statisticsWritingConfiguration)
+public record OutputConfiguration<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload>(Path outputDirectory, INewIdentitySupplier identifier, INamedASTBuilderFactory<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> astBuilderFactory, IMetadataASTBuilder metadataProvider, INamedASTOutputWriter writer, IStatisticsWriter statisticsWriter, MetadataWritingConfiguration metadataWritingConfiguration, StatisticsWritingConfiguration statisticsWritingConfiguration)
 {
 }

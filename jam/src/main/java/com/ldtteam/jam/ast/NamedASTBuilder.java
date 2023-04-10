@@ -20,6 +20,7 @@ import com.ldtteam.jam.spi.ast.named.builder.INamedASTBuilder;
 import com.ldtteam.jam.spi.ast.named.builder.INamedClassBuilder;
 import com.ldtteam.jam.spi.name.INameProvider;
 import com.ldtteam.jam.spi.name.IRemapper;
+import com.ldtteam.jam.spi.payload.IPayloadSupplier;
 import com.ldtteam.jam.util.MethodDataUtils;
 import org.objectweb.asm.Opcodes;
 import org.slf4j.Logger;
@@ -32,60 +33,64 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TooManyListenersException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class NamedASTBuilder implements INamedASTBuilder {
+public class NamedASTBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> implements INamedASTBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NamedASTBuilder.class);
     private final IRemapper runtimeToASTRemapper;
     private final IRemapper ASTtoRuntimeRemapper;
-    private final INamedClassBuilder classBuilder;
-    private NamedASTBuilder(IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder) {
+    private final INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> classBuilder;
+    private NamedASTBuilder(IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> classBuilder) {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
         ASTtoRuntimeRemapper = asTtoRuntimeRemapper;
         this.classBuilder = classBuilder;
     }
 
-    public static INamedASTBuilder create(
-            IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder classBuilder
+    public static <TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> INamedASTBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> create(
+            IRemapper runtimeToASTRemapper, IRemapper asTtoRuntimeRemapper, INamedClassBuilder<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> classBuilder
     ) {
-        return new NamedASTBuilder(runtimeToASTRemapper, asTtoRuntimeRemapper, classBuilder);
+        return new NamedASTBuilder<>(runtimeToASTRemapper, asTtoRuntimeRemapper, classBuilder);
     }
 
     @Override
     public INamedAST build(
-            final BiMap<ClassData, ClassData> classMappings,
-            final BiMap<FieldData, FieldData> fieldMappings,
-            final BiMap<MethodData, MethodData> methodMappings,
-            final BiMap<ParameterData, ParameterData> parameterMappings,
-            final BiMap<ClassData, Integer> classIds,
-            final BiMap<MethodData, Integer> methodIds,
-            final BiMap<FieldData, Integer> fieldIds,
-            final BiMap<ParameterData, Integer> parameterIds,
-            final IASMData asmData,
-            final IMetadataAST metadataAST
+            BiMap<ClassData<TClassPayload>, ClassData<TClassPayload>> classMappings,
+            BiMap<FieldData<TClassPayload, TFieldPayload>, FieldData<TClassPayload, TFieldPayload>> fieldMappings,
+            BiMap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> methodMappings,
+            BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, ParameterData<TClassPayload, TMethodPayload, TParameterPayload>> parameterMappings,
+            BiMap<ClassData<TClassPayload>, Integer> classIds,
+            BiMap<MethodData<TClassPayload, TMethodPayload>, Integer> methodIds,
+            BiMap<FieldData<TClassPayload, TFieldPayload>, Integer> fieldIds,
+            BiMap<ParameterData<TClassPayload, TMethodPayload, TParameterPayload>, Integer> parameterIds,
+            IASMData<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> asmData,
+            IMetadataAST metadataAST
     ) {
-        record ClassDatasByMethodDataEntry(ClassData classData, MethodData methodData) {
+        record ClassDatasByMethodDataEntry<TClassPayload, TMethodPayload>(ClassData<TClassPayload> classData, MethodData<TClassPayload, TMethodPayload> methodData) {
         }
-        final Map<MethodData, ClassData> classDatasByMethodData = asmData.classes().stream()
+        final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloadSupplier = asmData.payloadSupplier().orElse(IPayloadSupplier.empty());
+        final Map<MethodData<TClassPayload, TMethodPayload>, ClassData<TClassPayload>> classDatasByMethodData = asmData.classes().stream()
                 .flatMap(classData -> classData.node().methods.stream()
-                        .map(node -> new ClassDatasByMethodDataEntry(classData, new MethodData(classData, node))))
+                        .map(node -> new ClassDatasByMethodDataEntry<>(classData, new MethodData<>(classData, node, payloadSupplier.forMethod(classData.node(), node)))))
                 .collect(Collectors.toMap(ClassDatasByMethodDataEntry::methodData, ClassDatasByMethodDataEntry::classData));
-        final Map<ClassData, LinkedList<ClassData>> inheritanceData = buildInheritanceData(asmData.classes());
 
-        final Multimap<ClassData, ClassData> inheritanceVolumes = buildInheritanceVolumes(inheritanceData);
+        final Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> inheritanceData = buildInheritanceData(asmData.classes());
 
-        final Map<MethodData, MethodData> rootMethodsByOverride = buildForcedMethods(
+        final Multimap<ClassData<TClassPayload>, ClassData<TClassPayload>> inheritanceVolumes = buildInheritanceVolumes(inheritanceData);
+
+        final Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> rootMethodsByOverride = buildForcedMethods(
                 asmData.methods(),
                 inheritanceData,
                 classDatasByMethodData,
                 methodIds,
-                metadataAST
+                metadataAST,
+                payloadSupplier
         );
-        final Multimap<MethodData, MethodData> overrideTree = MethodDataUtils.buildOverrideTree(rootMethodsByOverride);
+        final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrideTree = MethodDataUtils.buildOverrideTree(rootMethodsByOverride);
 
-        final Map<String, ClassData> classDatasByASTName = asmData.classes().stream()
+        final Map<String, ClassData<TClassPayload>> classDatasByASTName = asmData.classes().stream()
                 .collect(Collectors.toMap(
                         classData -> runtimeToASTRemapper.remapClass(classData.node().name)
                                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name))),
@@ -116,16 +121,16 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return new NamedAST(classes.values());
     }
 
-    private Multimap<ClassData, ClassData> buildInheritanceVolumes(Map<ClassData, LinkedList<ClassData>> inheritanceData) {
-        Map<ClassData, Set<ClassData>> inheritanceVolumes = new HashMap<>();
-        for (ClassData classData : inheritanceData.keySet()) {
-            final Set<ClassData> volume = inheritanceVolumes.computeIfAbsent(classData, d -> Sets.newHashSet());
+    private Multimap<ClassData<TClassPayload>, ClassData<TClassPayload>> buildInheritanceVolumes(Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> inheritanceData) {
+        Map<ClassData<TClassPayload>, Set<ClassData<TClassPayload>>> inheritanceVolumes = new HashMap<>();
+        for (ClassData<TClassPayload> classData : inheritanceData.keySet()) {
+            final Set<ClassData<TClassPayload>> volume = inheritanceVolumes.computeIfAbsent(classData, d -> Sets.newHashSet());
             volume.add(classData);
             inheritanceData.get(classData).forEach(inheritanceClassData -> volume.add(classData));
             inheritanceVolumes.put(classData, volume);
         }
 
-        final Multimap<ClassData, ClassData> inheritanceVolumesByClass = HashMultimap.create();
+        final Multimap<ClassData<TClassPayload>, ClassData<TClassPayload>> inheritanceVolumesByClass = HashMultimap.create();
         inheritanceVolumes.forEach((classData, volume) -> volume.forEach(c -> {
             inheritanceVolumesByClass.put(classData, c);
             inheritanceVolumesByClass.put(c, classData);
@@ -133,34 +138,34 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return inheritanceVolumesByClass;
     }
 
-    private Map<ClassData, LinkedList<ClassData>> buildInheritanceData(final Collection<ClassData> classes) {
-        final Map<String, ClassData> classDatasByName = classes.stream()
+    private Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> buildInheritanceData(final Collection<ClassData<TClassPayload>> classes) {
+        final Map<String, ClassData<TClassPayload>> classDatasByName = classes.stream()
                 .collect(Collectors.toMap(INameProvider.classes(), Function.identity()));
 
         return classes.stream()
                 .collect(Collectors.toMap(Function.identity(), classData -> getInheritanceOf(classDatasByName, classData.node().name, Sets.newHashSet())));
     }
 
-    private LinkedList<ClassData> getInheritanceOf(final Map<String, ClassData> classDatasByName, final String className, final Set<ClassData> superTypes) {
-        final ClassData classData = classDatasByName.get(className);
+    private LinkedList<ClassData<TClassPayload>> getInheritanceOf(final Map<String, ClassData<TClassPayload>> classDatasByName, final String className, final Set<ClassData<TClassPayload>> superTypes) {
+        final ClassData<TClassPayload> classData = classDatasByName.get(className);
         if (classData == null) {
             return new LinkedList<>();
         }
 
-        final LinkedList<ClassData> inheritance = new LinkedList<>();
+        final LinkedList<ClassData<TClassPayload>> inheritance = new LinkedList<>();
         superTypes.add(classData);
         inheritance.add(classData);
 
         final String superClassName = classData.node().superName;
         if (superClassName != null) {
-            final LinkedList<ClassData> superInheritance = getInheritanceOf(classDatasByName, superClassName, superTypes);
+            final LinkedList<ClassData<TClassPayload>> superInheritance = getInheritanceOf(classDatasByName, superClassName, superTypes);
             inheritance.addAll(superInheritance);
         }
 
         final List<String> interfaces = classData.node().interfaces;
         if (interfaces != null) {
             for (String interfaceName : interfaces) {
-                final LinkedList<ClassData> superInheritance = getInheritanceOf(classDatasByName, interfaceName, superTypes);
+                final LinkedList<ClassData<TClassPayload>> superInheritance = getInheritanceOf(classDatasByName, interfaceName, superTypes);
                 inheritance.addAll(superInheritance);
             }
         }
@@ -168,29 +173,30 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return inheritance;
     }
 
-    private Map<MethodData, MethodData> buildForcedMethods(
-            final Collection<MethodData> methods,
-            final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
-            final Map<MethodData, ClassData> classDatasByMethodData,
-            final BiMap<MethodData, Integer> methodIds,
-            final IMetadataAST metadataAST) {
-        final Map<MethodReference, MethodData> methodsByReference = collectMethodReferences(methods, classDatasByMethodData);
-        final Multimap<MethodData, MethodData> overrides = collectMethodOverrides(methods, classInheritanceData, classDatasByMethodData, metadataAST, methodsByReference);
-        final Set<Set<MethodData>> combinedTrees = buildOverrideTrees(overrides);
+    private Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> buildForcedMethods(
+            final Collection<MethodData<TClassPayload, TMethodPayload>> methods,
+            final Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> classInheritanceData,
+            final Map<MethodData<TClassPayload, TMethodPayload>, ClassData<TClassPayload>> classDatasByMethodData,
+            final BiMap<MethodData<TClassPayload, TMethodPayload>, Integer> methodIds,
+            final IMetadataAST metadataAST,
+            final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloadSupplier) {
+        final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference = collectMethodReferences(methods, classDatasByMethodData);
+        final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides = collectMethodOverrides(methods, classInheritanceData, classDatasByMethodData, metadataAST, methodsByReference, payloadSupplier);
+        final Set<Set<MethodData<TClassPayload, TMethodPayload>>> combinedTrees = buildOverrideTrees(overrides);
         return determineIdsPerOverrideTree(methodIds, combinedTrees);
     }
 
-    public Map<MethodReference, MethodData> collectMethodReferences(
-            final Collection<MethodData> methods,
-            final Map<MethodData, ClassData> classDatasByMethodData
+    public Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> collectMethodReferences(
+            final Collection<MethodData<TClassPayload, TMethodPayload>> methods,
+            final Map<MethodData<TClassPayload, TMethodPayload>, ClassData<TClassPayload>> classDatasByMethodData
     ) {
-        final Map<MethodReference, MethodData> methodsByReference = new HashMap<>();
+        final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference = new HashMap<>();
         methods.forEach(methodData -> {
             if (methodData.node().name.startsWith("<")) {
                 return;
             }
 
-            final ClassData classData = classDatasByMethodData.get(methodData);
+            final ClassData<TClassPayload> classData = classDatasByMethodData.get(methodData);
             methodsByReference.put(
                     new MethodReference(classData.node().name, methodData.node().name, methodData.node().desc),
                     methodData
@@ -199,23 +205,24 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return methodsByReference;
     }
 
-    public Multimap<MethodData, MethodData> collectMethodOverrides(
-            final Collection<MethodData> methods,
-            final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
-            final Map<MethodData, ClassData> classDatasByMethodData,
+    public Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> collectMethodOverrides(
+            final Collection<MethodData<TClassPayload, TMethodPayload>> methods,
+            final Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> classInheritanceData,
+            final Map<MethodData<TClassPayload, TMethodPayload>, ClassData<TClassPayload>> classDatasByMethodData,
             final IMetadataAST metadataAST,
-            final Map<MethodReference, MethodData> methodsByReference
+            final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference,
+            final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloadSupplier
     ) {
 
-        final Multimap<MethodData, MethodData> overrides = HashMultimap.create();
+        final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides = HashMultimap.create();
         methods.forEach(
                 methodData -> {
                     if (methodData.node().name.startsWith("<") || (methodData.node().access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE)) != 0) {
                         return;
                     }
 
-                    final ClassData classData = classDatasByMethodData.get(methodData);
-                    collectMethodOverridesFromASMData(classInheritanceData, overrides, methodData, classData);
+                    final ClassData<TClassPayload> classData = classDatasByMethodData.get(methodData);
+                    collectMethodOverridesFromASMData(classInheritanceData, overrides, methodData, classData, payloadSupplier);
 
                     final IMetadataMethod methodInfo = getMetadataForMethod(metadataAST, methodData, classData);
                     if (methodInfo == null) {
@@ -232,20 +239,21 @@ public class NamedASTBuilder implements INamedASTBuilder {
     }
 
     private void collectMethodOverridesFromASMData(
-            final Map<ClassData, LinkedList<ClassData>> classInheritanceData,
-            final Multimap<MethodData, MethodData> overrides,
-            final MethodData methodData,
-            final ClassData classData) {
-        final LinkedList<ClassData> superTypes = classInheritanceData.getOrDefault(classData, new LinkedList<>());
+            final Map<ClassData<TClassPayload>, LinkedList<ClassData<TClassPayload>>> classInheritanceData,
+            final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides,
+            final MethodData<TClassPayload, TMethodPayload> methodData,
+            final ClassData<TClassPayload> classData,
+            final IPayloadSupplier<TClassPayload, TFieldPayload, TMethodPayload, TParameterPayload> payloadSupplier) {
+        final LinkedList<ClassData<TClassPayload>> superTypes = classInheritanceData.getOrDefault(classData, new LinkedList<>());
         if (!superTypes.isEmpty()) {
             superTypes.forEach(superType -> superType.node().methods.stream()
                     .filter(superMethodData -> !superMethodData.name.equals("<"))
                     .filter(superMethodData -> superMethodData.name.equals(methodData.node().name) && superMethodData.desc.equals(methodData.node().desc))
-                    .forEach(superMethodData -> overrides.put(methodData, new MethodData(superType, superMethodData))));
+                    .forEach(superMethodData -> overrides.put(methodData, new MethodData<>(superType, superMethodData, payloadSupplier.forMethod(superType.node(), superMethodData)))));
         }
     }
 
-    private IMetadataMethod getMetadataForMethod(final IMetadataAST metadataAST, final MethodData methodData, final ClassData classData) {
+    private IMetadataMethod getMetadataForMethod(final IMetadataAST metadataAST, final MethodData<TClassPayload, TMethodPayload> methodData, final ClassData<TClassPayload> classData) {
         final String obfuscatedOwnerClassName = runtimeToASTRemapper.remapClass(classData.node().name)
                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(classData.node().name)));
         if (Objects.equals(obfuscatedOwnerClassName, classData.node().name)) {
@@ -289,9 +297,9 @@ public class NamedASTBuilder implements INamedASTBuilder {
     }
 
     private void collectMethodOverridesFromMetadata(
-            final Map<MethodReference, MethodData> methodsByReference,
-            final Multimap<MethodData, MethodData> overrides,
-            final MethodData methodData,
+            final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference,
+            final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides,
+            final MethodData<TClassPayload, TMethodPayload> methodData,
             final IMetadataMethod methodInfo) {
         if (methodInfo.getOverrides() == null) {
             //No overrides available.
@@ -305,16 +313,16 @@ public class NamedASTBuilder implements INamedASTBuilder {
     }
 
     private void collectMethodBouncersFromMetadata(
-            final Map<MethodReference, MethodData> methodsByReference,
-            final Multimap<MethodData, MethodData> overrides,
-            final MethodData methodData,
+            final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference,
+            final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides,
+            final MethodData<TClassPayload, TMethodPayload> methodData,
             final IMetadataMethod methodInfo) {
         if (methodInfo.getBouncer() == null) {
             //Is not a bouncer method
             return;
         }
 
-        MethodData target = getMethodData(methodsByReference, methodInfo.getBouncer().getTarget());
+        MethodData<TClassPayload, TMethodPayload> target = getMethodData(methodsByReference, methodInfo.getBouncer().getTarget());
         if (target == null) {
             return;
         }
@@ -323,8 +331,8 @@ public class NamedASTBuilder implements INamedASTBuilder {
         overrides.putAll(methodData, overrides.get(target));
     }
 
-    private MethodData getMethodData(
-            final Map<MethodReference, MethodData> methodsByReference,
+    private MethodData<TClassPayload, TMethodPayload> getMethodData(
+            final Map<MethodReference, MethodData<TClassPayload, TMethodPayload>> methodsByReference,
             final IMetadataMethodReference method) {
         final String officialClassName = ASTtoRuntimeRemapper.remapClass(method.getOwner())
                 .orElseThrow(() -> new IllegalStateException("Failed to remap class: %s".formatted(method.getOwner())));
@@ -349,12 +357,12 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return methodsByReference.get(reference);
     }
 
-    public Set<Set<MethodData>> buildOverrideTrees(
-            final Multimap<MethodData, MethodData> overrides
+    public Set<Set<MethodData<TClassPayload, TMethodPayload>>> buildOverrideTrees(
+            final Multimap<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overrides
     ) {
-        final Set<MethodData> processedData = Sets.newHashSet();
-        final Set<Set<MethodData>> combinedTrees = Sets.newHashSet();
-        final Map<MethodData, Collection<MethodData>> overrideBranchMap = overrides.asMap();
+        final Set<MethodData<TClassPayload, TMethodPayload>> processedData = Sets.newHashSet();
+        final Set<Set<MethodData<TClassPayload, TMethodPayload>>> combinedTrees = Sets.newHashSet();
+        final Map<MethodData<TClassPayload, TMethodPayload>, Collection<MethodData<TClassPayload, TMethodPayload>>> overrideBranchMap = overrides.asMap();
 
         overrideBranchMap.keySet().forEach(
                 overriddenMethod -> {
@@ -369,8 +377,8 @@ public class NamedASTBuilder implements INamedASTBuilder {
                     }
 
                     processedData.add(overriddenMethod);
-                    final Set<MethodData> workingSet = Sets.newHashSet(overrides.get(overriddenMethod));
-                    for (final Collection<MethodData> overrideBranch : overrideBranchMap.values()) {
+                    final Set<MethodData<TClassPayload, TMethodPayload>> workingSet = Sets.newHashSet(overrides.get(overriddenMethod));
+                    for (final Collection<MethodData<TClassPayload, TMethodPayload>> overrideBranch : overrideBranchMap.values()) {
                         if (overrideBranch.stream().anyMatch(workingSet::contains)) {
                             workingSet.addAll(overrideBranch);
                         }
@@ -384,14 +392,14 @@ public class NamedASTBuilder implements INamedASTBuilder {
         return combinedTrees;
     }
 
-    public Map<MethodData, MethodData> determineIdsPerOverrideTree(
-            final BiMap<MethodData, Integer> methodIds,
-            final Set<Set<MethodData>> combinedTrees
+    public Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> determineIdsPerOverrideTree(
+            final BiMap<MethodData<TClassPayload, TMethodPayload>, Integer> methodIds,
+            final Set<Set<MethodData<TClassPayload, TMethodPayload>>> combinedTrees
     ) {
-        final BiMap<Integer, MethodData> methodDatasById = methodIds.inverse();
-        final Map<MethodData, MethodData> overridesByMethod = new HashMap<>();
-        for (final Set<MethodData> combinedTree : combinedTrees) {
-            final MethodData rootData = combinedTree.stream()
+        final BiMap<Integer, MethodData<TClassPayload, TMethodPayload>> methodDatasById = methodIds.inverse();
+        final Map<MethodData<TClassPayload, TMethodPayload>, MethodData<TClassPayload, TMethodPayload>> overridesByMethod = new HashMap<>();
+        for (final Set<MethodData<TClassPayload, TMethodPayload>> combinedTree : combinedTrees) {
+            final MethodData<TClassPayload, TMethodPayload> rootData = combinedTree.stream()
                     .mapToInt(methodIds::get)
                     .min()
                     .stream()
@@ -399,7 +407,7 @@ public class NamedASTBuilder implements INamedASTBuilder {
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("No root data found"));
 
-            for (final MethodData methodData : combinedTree) {
+            for (final MethodData<TClassPayload, TMethodPayload> methodData : combinedTree) {
                 overridesByMethod.put(methodData, rootData);
             }
         }

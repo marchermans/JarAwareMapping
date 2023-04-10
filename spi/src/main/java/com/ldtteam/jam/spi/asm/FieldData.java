@@ -2,5 +2,7 @@ package com.ldtteam.jam.spi.asm;
 
 import org.objectweb.asm.tree.FieldNode;
 
-public record FieldData(ClassData owner, FieldNode node) {
+import java.util.Optional;
+
+public record FieldData<TClassPayload, TFieldPayload>(ClassData<TClassPayload> owner, FieldNode node, Optional<TFieldPayload> payload) {
 }
