@@ -13,7 +13,7 @@ public interface IMetadataClass extends IMetadataWithAccessInformation {
 
     /**
      * Gives access to the name of the super class of this class.
-     *
+     * <p>
      * This class is potentially not part of the current AST, if it is part of a library,
      * or part of the jdk.
      *
@@ -24,7 +24,7 @@ public interface IMetadataClass extends IMetadataWithAccessInformation {
 
     /**
      * Gives access to a list of names of interfaces which this class implements.
-     *
+     * <p>
      * The listed interfaces are potentially not all part of the current AST, if they are part of a library,
      * or part of the jdk.
      *

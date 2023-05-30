@@ -18,6 +18,10 @@ public interface INameProvider<T> extends Function<T, String>
         return data -> data.node().name + data.node().desc;
     }
 
+    static INameProvider<MethodData> methodsByNameOnly() {
+        return data -> data.node().name;
+    }
+
     static INameProvider<FieldData> fields() {
         return data -> data.node().name;
     }

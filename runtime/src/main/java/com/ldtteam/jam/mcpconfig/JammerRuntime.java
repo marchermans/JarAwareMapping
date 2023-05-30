@@ -2,6 +2,7 @@ package com.ldtteam.jam.mcpconfig;
 
 import com.google.common.collect.Lists;
 import com.ldtteam.jam.spi.IJammer;
+import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.named.builder.factory.INamedASTBuilderFactory;
 import com.ldtteam.jam.spi.configuration.*;
 import com.ldtteam.jam.spi.identification.IExistingIdentitySupplier;
@@ -79,6 +80,11 @@ public final class JammerRuntime
             "The mapping of the input version.")
           .withRequiredArg()
           .ofType(File.class);
+        final AbstractOptionSpec<File> existingMetadataOption = parser.acceptsAll(
+                        Lists.newArrayList("existingMetadata", "emd"),
+                        "The metadata of the input version.")
+                .withRequiredArg()
+                .ofType(File.class);
         final AbstractOptionSpec<File> existingIdentifiersOption = parser.acceptsAll(
             Lists.newArrayList("existingIdentifiers", "ei"),
             "The identifiers of the input version.")
@@ -157,6 +163,7 @@ public final class JammerRuntime
         final List<String> existingNames = parsed.valuesOf(existingNamesOption);
         final List<File> existingJars = parsed.valuesOf(existingJarsOption);
         final List<File> existingMappings = parsed.valuesOf(existingMappingsOption);
+        final List<File> existingMetadata = parsed.valuesOf(existingMetadataOption);
         final List<File> existingIdentifiers = parsed.valuesOf(existingIdentifiersOption);
 
         final String inputName = parsed.valueOf(inputNameOption);
@@ -175,9 +182,9 @@ public final class JammerRuntime
         final boolean shouldWriteStatisticsToDisk = parsed.valueOf(writeStatisticsToDiskOption);
         final boolean shouldWriteStatisticsToLog = parsed.valueOf(writeStatisticsToLogOption);
 
-        if (existingNames.size() != existingJars.size() || existingNames.size() != existingMappings.size() || existingNames.size() != existingIdentifiers.size())
+        if (existingNames.size() != existingJars.size() || existingNames.size() != existingMappings.size() || existingNames.size() != existingIdentifiers.size() || existingNames.size() != existingMetadata.size())
         {
-            LOGGER.error("The number of existing names, jars, mappings and identifiers must be equal.");
+            LOGGER.error("The number of existing names, jars, mappings, metadata and identifiers must be equal.");
             return;
         }
 
@@ -198,7 +205,9 @@ public final class JammerRuntime
         {
             final String name = existingNames.get(i);
             final Path jar = existingJars.get(i).toPath();
-            final Optional<IRemapper> remapped = Optional.ofNullable(obfuscatedToOfficialRemapperProducer.from(existingMappings.get(i).toPath()));
+            final Path metadata = existingMetadata.get(i).toPath();
+            final IMetadataAST ast = metadataASTProducer.from(metadata).ast();
+            final Optional<IRemapper> remapped = Optional.ofNullable(obfuscatedToOfficialRemapperProducer.from(existingMappings.get(i).toPath(), ast));
             final Optional<IExistingIdentitySupplier> identifier = Optional.ofNullable(existingIdentitySupplierProducer.from(
               existingIdentifiers.get(i).toPath(),
               existingMappings.get(i).toPath()
@@ -211,14 +220,16 @@ public final class JammerRuntime
             inputConfigurations.add(new InputConfiguration(name, jar, remapped, identifier, names));
         }
 
+        final IMetadataAST inputAST = metadataASTProducer.from(inputMetadata.toPath()).ast();
+
         inputConfigurations.add(
-          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(obfuscatedToOfficialRemapperProducer.from(inputMapping.toPath())), Optional.empty(), Optional.empty())
+          new InputConfiguration(inputName, inputJar.toPath(), Optional.of(obfuscatedToOfficialRemapperProducer.from(inputMapping.toPath(), inputAST)), Optional.empty(), Optional.empty())
         );
 
         final OutputConfiguration outputConfiguration = new OutputConfiguration(
           outputPath.toPath(),
           newIdentitySupplierProducer.from(existingIdentifiers.get(existingIdentifiers.size() - 1).toPath()),
-          namedASTProducer.from(inputMapping.toPath()),
+          namedASTProducer.from(inputMapping.toPath(), inputAST),
           metadataASTProducer.from(inputMetadata.toPath()),
           namedASTOutputWriterProducer.create(),
           statisticsWriterProducer.create(),
@@ -257,7 +268,7 @@ public final class JammerRuntime
     @FunctionalInterface
     public interface IRemapperProducer {
 
-        IRemapper from(final Path mappingsPath);
+        IRemapper from(final Path mappingsPath, final IMetadataAST metadata);
     }
 
     @FunctionalInterface
@@ -278,7 +289,7 @@ public final class JammerRuntime
     @FunctionalInterface
     public interface INamedASTBuilderProducer
     {
-        INamedASTBuilderFactory from(final Path inputMappingPath);
+        INamedASTBuilderFactory from(final Path inputMappingPath, IMetadataAST ast);
     }
 
     @FunctionalInterface

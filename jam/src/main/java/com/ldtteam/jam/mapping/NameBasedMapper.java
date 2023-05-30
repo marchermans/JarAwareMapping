@@ -20,6 +20,10 @@ public class NameBasedMapper<T> extends SingleEntryBasedMapper<T>
         return new NameBasedMapper<>(INameProvider.methods());
     }
 
+    public static IMapper<MethodData> methodsByNameOnly() {
+        return new NameBasedMapper<>(INameProvider.methodsByNameOnly());
+    }
+
     public static IMapper<FieldData> fields() {
         return new NameBasedMapper<>(INameProvider.fields());
     }
