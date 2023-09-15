@@ -82,7 +82,7 @@ subprojects { subproject ->
                         username System.getenv().get("ForgeMavenUsername")
                         password System.getenv().get("ForgeMavenPassword")
                     }
-                    url 'https://maven.minecraftforge.net/'
+                    url 'https://maven.neoforged.net/releases'
                 }
             }
         }
