@@ -1,11 +1,11 @@
 rootProject.name = 'JarAwareMapping'
 
 include(':jam-jam')
-include(':jam-mcpconfig')
+include(':jam-neoform')
 include(':jam-spi')
 include(':jam-runtime')
 
 project(':jam-jam').projectDir = new File('jam')
-project(':jam-mcpconfig').projectDir = new File('mcpconfig')
+project(':jam-neoform').projectDir = new File('neoform')
 project(':jam-spi').projectDir = new File('spi')
 project(':jam-runtime').projectDir = new File('runtime')

@@ -1,4 +1,4 @@
-package com.ldtteam.jam.mcpconfig;
+package com.ldtteam.jam.neoform;
 
 import com.google.common.collect.Lists;
 import com.ldtteam.jam.spi.IJammer;

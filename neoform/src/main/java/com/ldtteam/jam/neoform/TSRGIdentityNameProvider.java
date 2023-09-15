@@ -1,4 +1,4 @@
-package com.ldtteam.jam.mcpconfig;
+package com.ldtteam.jam.neoform;
 
 import com.ldtteam.jam.ast.NamedClassBuilder;
 import com.ldtteam.jam.ast.NamedFieldBuilder;

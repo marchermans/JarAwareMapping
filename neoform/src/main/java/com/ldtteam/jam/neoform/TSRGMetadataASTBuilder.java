@@ -1,4 +1,4 @@
-package com.ldtteam.jam.mcpconfig;
+package com.ldtteam.jam.neoform;
 
 import com.google.common.base.Suppliers;
 import com.google.gson.Gson;

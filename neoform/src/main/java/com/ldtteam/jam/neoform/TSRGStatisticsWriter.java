@@ -1,4 +1,4 @@
-package com.ldtteam.jam.mcpconfig;
+package com.ldtteam.jam.neoform;
 
 import com.ldtteam.jam.spi.configuration.Configuration;
 import com.ldtteam.jam.spi.configuration.InputConfiguration;

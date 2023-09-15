@@ -75,7 +75,7 @@ public class NamedParameterBuilder implements INamedParameterBuilder
             final IMetadataRecordComponent recordInfo = classMetadata.getRecords().get(index);
             if (identifiedFieldNamesByASTName.containsKey(recordInfo.getField()))
             {
-                mappedParameterName = identifiedFieldNamesByASTName.get(recordInfo.getField());
+                mappedParameterName = recordInfo.getField();
                 LOGGER.debug("Remapped parameter of %s records constructor for id: %d to: %s".formatted(classData.node().name, parameterId, mappedParameterName));
             }
         }
