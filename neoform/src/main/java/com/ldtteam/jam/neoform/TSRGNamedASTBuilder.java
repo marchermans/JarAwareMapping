@@ -73,10 +73,12 @@ public class TSRGNamedASTBuilder {
 
     public static INamedParameterBuilder parameters(final Path inputMappingPath, IMetadataAST metadata) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath, metadata);
+        final IRemapper obfuscatedToOfficialRemapper = TSRGRemapper.createObfuscatedToOfficial(inputMappingPath, metadata);
         final INameProvider<NamedParameterBuilder.ParameterNamingInformation> parameterNameProvider = TSRGIdentityNameProvider.parameters();
 
         return NamedParameterBuilder.create(
                 officialToObfuscatedRemapper,
+                obfuscatedToOfficialRemapper,
                 parameterNameProvider
         );
     }

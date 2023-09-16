@@ -24,19 +24,22 @@ public class NamedParameterBuilder implements INamedParameterBuilder
     private static final Logger LOGGER = LoggerFactory.getLogger(NamedParameterBuilder.class);
 
     public static INamedParameterBuilder create(
-      final IRemapper runtimeToASTRemapper,
+          final IRemapper runtimeToASTRemapper,
+          final IRemapper astToRuntimeRemapper,
       final INameProvider<ParameterNamingInformation> parameterIdToNameProvider
     )
     {
-        return new NamedParameterBuilder(runtimeToASTRemapper, parameterIdToNameProvider);
+        return new NamedParameterBuilder(runtimeToASTRemapper, astToRuntimeRemapper, parameterIdToNameProvider);
     }
 
     private final IRemapper              runtimeToASTRemapper;
+    private final IRemapper              astToRuntimeRemapper;
     private final INameProvider<ParameterNamingInformation> parameterNameProvider;
 
-    private NamedParameterBuilder(IRemapper runtimeToASTRemapper, INameProvider<ParameterNamingInformation> parameterNameProvider)
+    private NamedParameterBuilder(IRemapper runtimeToASTRemapper, IRemapper astToRuntimeRemapper, INameProvider<ParameterNamingInformation> parameterNameProvider)
     {
         this.runtimeToASTRemapper = runtimeToASTRemapper;
+        this.astToRuntimeRemapper = astToRuntimeRemapper;
         this.parameterNameProvider = parameterNameProvider;
     }
 
@@ -75,7 +78,11 @@ public class NamedParameterBuilder implements INamedParameterBuilder
             final IMetadataRecordComponent recordInfo = classMetadata.getRecords().get(index);
             if (identifiedFieldNamesByASTName.containsKey(recordInfo.getField()))
             {
-                mappedParameterName = recordInfo.getField();
+                mappedParameterName = this.astToRuntimeRemapper.remapField(
+                      this.runtimeToASTRemapper.remapClass(methodData.owner().node().name).orElseThrow(),
+                      recordInfo.getField(),
+                      recordInfo.getDesc()
+                ).orElseThrow();
                 LOGGER.debug("Remapped parameter of %s records constructor for id: %d to: %s".formatted(classData.node().name, parameterId, mappedParameterName));
             }
         }
