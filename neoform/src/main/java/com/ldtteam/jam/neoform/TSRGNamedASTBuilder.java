@@ -29,7 +29,7 @@ public class TSRGNamedASTBuilder {
 
     public static INamedClassBuilder classes(final Path inputMappingPath, IMetadataAST metadata) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath, metadata);
-        final INameProvider<NamedClassBuilder.ClassNamingInformation> classNameProvider = TSRGIdentityNameProvider.classes();
+        final INameProvider<NamedClassBuilder.ClassNamingInformation> classNameProvider = TSRGObfuscatedNameProvider.classes(officialToObfuscatedRemapper);
         final INamedFieldBuilder fieldBuilder = fields(inputMappingPath, metadata);
         final INamedMethodBuilder methodBuilder = methods(inputMappingPath, metadata);
 
@@ -45,7 +45,7 @@ public class TSRGNamedASTBuilder {
 
     public static INamedFieldBuilder fields(final Path inputMappingPath, IMetadataAST metadata) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath, metadata);
-        final INameProvider<NamedFieldBuilder.FieldNamingInformation> fieldNameProvider = TSRGIdentityNameProvider.fields();
+        final INameProvider<NamedFieldBuilder.FieldNamingInformation> fieldNameProvider = TSRGObfuscatedNameProvider.fields(officialToObfuscatedRemapper);
 
         return NamedFieldBuilder.create(
                 officialToObfuscatedRemapper,
@@ -58,7 +58,7 @@ public class TSRGNamedASTBuilder {
     public static INamedMethodBuilder methods(final Path inputMappingPath, IMetadataAST metadata) {
         final IRemapper officialToObfuscatedRemapper = TSRGRemapper.createOfficialToObfuscated(inputMappingPath, metadata);
         final IRemapper metadataToOfficialRemapper = TSRGRemapper.createObfuscatedToOfficial(inputMappingPath, metadata);
-        final INameProvider<NamedMethodBuilder.MethodNamingInformation> methodNameProvider = TSRGIdentityNameProvider.methods();
+        final INameProvider<NamedMethodBuilder.MethodNamingInformation> methodNameProvider = TSRGObfuscatedNameProvider.methods(officialToObfuscatedRemapper);
         final INamedParameterBuilder parameterBuilder = parameters(inputMappingPath, metadata);
 
         return NamedMethodBuilder.create(
