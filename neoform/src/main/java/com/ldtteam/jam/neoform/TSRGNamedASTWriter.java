@@ -4,9 +4,9 @@ import com.ldtteam.jam.spi.ast.named.INamedAST;
 import com.ldtteam.jam.spi.configuration.MetadataWritingConfiguration;
 import com.ldtteam.jam.spi.writer.INamedASTOutputWriter;
 import com.machinezoo.noexception.Exceptions;
-import net.minecraftforge.srgutils.IMappingBuilder;
-import net.minecraftforge.srgutils.IMappingFile;
-import net.minecraftforge.srgutils.INamedMappingFile;
+import net.neoforged.srgutils.IMappingBuilder;
+import net.neoforged.srgutils.IMappingFile;
+import net.neoforged.srgutils.INamedMappingFile;
 
 import java.nio.file.Path;
 

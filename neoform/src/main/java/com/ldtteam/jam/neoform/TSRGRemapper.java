@@ -4,8 +4,8 @@ import com.ldtteam.jam.spi.ast.metadata.IMetadataAST;
 import com.ldtteam.jam.spi.ast.metadata.IMetadataClass;
 import com.ldtteam.jam.spi.name.IRemapper;
 import com.machinezoo.noexception.Exceptions;
-import net.minecraftforge.srgutils.IMappingFile;
-import net.minecraftforge.srgutils.INamedMappingFile;
+import net.neoforged.srgutils.IMappingFile;
+import net.neoforged.srgutils.INamedMappingFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

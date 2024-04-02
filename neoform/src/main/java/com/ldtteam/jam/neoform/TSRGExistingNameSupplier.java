@@ -6,8 +6,9 @@ import com.ldtteam.jam.spi.asm.MethodData;
 import com.ldtteam.jam.spi.asm.ParameterData;
 import com.ldtteam.jam.spi.name.IExistingNameSupplier;
 import com.machinezoo.noexception.Exceptions;
-import net.minecraftforge.srgutils.IMappingFile;
-import net.minecraftforge.srgutils.INamedMappingFile;
+
+import net.neoforged.srgutils.INamedMappingFile;
+import net.neoforged.srgutils.IMappingFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
