@@ -19,6 +19,8 @@ public class Main
           TSRGMappingRuntimeConfiguration::create,
           TSRGStatisticsWriter::create);
 
-        runtime.run(args);
+        if (!runtime.run(args)) {
+            System.exit(1);
+        }
     }
 }
