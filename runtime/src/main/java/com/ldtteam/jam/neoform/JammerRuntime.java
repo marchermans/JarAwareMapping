@@ -60,7 +60,7 @@ public final class JammerRuntime
         this.statisticsWriterProducer = statisticsWriterProducer;
     }
 
-    public void run(String[] args)
+    public boolean run(String[] args)
     {
         LOGGER.warn("Starting JammerRuntime with arguments: {}", String.join(" ", args));
 
@@ -185,19 +185,19 @@ public final class JammerRuntime
         if (existingNames.size() != existingJars.size() || existingNames.size() != existingMappings.size() || existingNames.size() != existingIdentifiers.size() || existingNames.size() != existingMetadata.size())
         {
             LOGGER.error("The number of existing names, jars, mappings, metadata and identifiers must be equal.");
-            return;
+            return false;
         }
 
         if (existingNames.size() == 0)
         {
             LOGGER.error("No existing names were given.");
-            return;
+            return false;
         }
 
         if (mappingMinimalBytecodeSizes.size() != mappingMinimalByteCodeMatchPercentage.size())
         {
             LOGGER.error("The number of minimal bytecode sizes and minimal bytecode match percentages must be equal.");
-            return;
+            return false;
         }
 
         final LinkedList<InputConfiguration> inputConfigurations = new LinkedList<>();
@@ -258,10 +258,12 @@ public final class JammerRuntime
         try
         {
             jammer.run(configuration);
+            return true;
         }
         catch (Exception ex)
         {
             LOGGER.error("An error occurred while running the jammer.", ex);
+            return false;
         }
     }
 
