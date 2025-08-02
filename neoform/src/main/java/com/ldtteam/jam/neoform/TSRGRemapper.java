@@ -10,6 +10,7 @@ import net.neoforged.srgutils.INamedMappingFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.function.Function;
 
 public class TSRGRemapper implements IRemapper {
 
@@ -42,8 +43,7 @@ public class TSRGRemapper implements IRemapper {
 
     @Override
     public Optional<String> remapMethod(final String className, final String name, final String descriptor) {
-        return Optional.ofNullable(remapper.getClass(className))
-                .map(c -> c.remapMethod(name, descriptor));
+        return remapUsingSuper(className, name, c -> c.remapMethod(name, descriptor), superClassName -> remapMethod(superClassName, name, descriptor), true);
     }
 
     @Override
@@ -53,8 +53,12 @@ public class TSRGRemapper implements IRemapper {
 
     @Override
     public Optional<String> remapField(final String className, final String name, final String type) {
+        return remapUsingSuper(className, name, c -> c.remapField(name), superClassName -> remapField(superClassName, name, type), false);
+    }
+    
+    private Optional<String> remapUsingSuper(String className, String name, Function<IMappingFile.IClass, String> remap, Function<String, Optional<String>> recurse, boolean interfaces) {
         return Optional.ofNullable(remapper.getClass(className))
-                .map(c -> c.remapField(name))
+                .map(remap::apply)
                 .map(f -> {
                     //Check if we remapped
                     if (!f.equals(name))
@@ -74,7 +78,21 @@ public class TSRGRemapper implements IRemapper {
                         return name;
 
                     //Check if the super class has the field.
-                    return remapField(superClassName, name, type).orElse(name);
+                    Optional<String> superClass = recurse.apply(superClassName);
+                    if (superClass.isPresent()) {
+                        return superClass.get();
+                    }
+
+                    //Check interfaces
+                    if (interfaces && classMetadata.getInterfaces() != null) {
+                        for (String interfaceClass : classMetadata.getInterfaces()) {
+                            Optional<String> interfaceClassMethod = recurse.apply(interfaceClass);
+                            if (interfaceClassMethod.isPresent()) {
+                                return interfaceClassMethod.get();
+                            }
+                        }
+                    }
+                    return name;
                 });
     }
 
