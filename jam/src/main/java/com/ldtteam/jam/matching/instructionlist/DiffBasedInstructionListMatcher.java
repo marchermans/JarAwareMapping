@@ -42,10 +42,10 @@ public class DiffBasedInstructionListMatcher implements IMatcher<InsnList> {
 
         Patch<InstructionNodeComparisonDelegate> patch = DiffUtils.diff(leftInstructions, rightInstructions);
         final long deleteAndInsertCount = patch.getDeltas().stream().map(AbstractDelta::getType)
-                                           .filter(type -> type == DeltaType.DELETE || type == DeltaType.INSERT)
+                                           .filter(type -> type == DeltaType.DELETE || type == DeltaType.INSERT || type == DeltaType.CHANGE)
                                            .count();
 
-        final float mappingPercentage = 100 - (float) deleteAndInsertCount / patch.getDeltas().size();
+        final float mappingPercentage = 100 - 100 * (float) deleteAndInsertCount / patch.getDeltas().size();
         float matchChangePercentage = 100-0f;
         List<Map.Entry<Integer, Float>> toSort = new ArrayList<>(mappingThresholdPercentage.entrySet());
         toSort.sort(Map.Entry.comparingByKey());
